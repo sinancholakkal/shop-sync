@@ -125,11 +125,11 @@ class _StaffPendingApprovalScreenState extends State<StaffPendingApprovalScreen>
         return;
       }
 
-      // 2. In-memory check in AppStateProvider
+      // 2. In-memory check in AppStateProvider (strictly by staffId)
       if (mounted) {
         final appState = Provider.of<AppStateProvider>(context, listen: false);
         final found = appState.staffList.firstWhere(
-          (s) => (s.id == widget.staffId || s.name == widget.staffName) && s.isApproved,
+          (s) => s.id == widget.staffId && s.isApproved,
           orElse: () => StaffMember(
             id: '',
             name: '',
@@ -170,9 +170,9 @@ class _StaffPendingApprovalScreenState extends State<StaffPendingApprovalScreen>
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final appState = Provider.of<AppStateProvider>(context);
 
-    // Auto-navigate if approved via live stream or state
+    // Auto-navigate if approved via live stream or state (strictly by staffId)
     final approvedStaff = appState.staffList.firstWhere(
-      (s) => (s.id == widget.staffId || s.name == widget.staffName) && s.isApproved,
+      (s) => s.id == widget.staffId && s.isApproved,
       orElse: () => StaffMember(
         id: '',
         name: '',

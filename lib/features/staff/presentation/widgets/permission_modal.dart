@@ -207,7 +207,7 @@ class _PermissionAssignmentModalState extends State<PermissionAssignmentModal> {
                           ),
                           child: Text(
                             widget.isApprovalMode || !widget.staff.isApproved
-                                ? 'Pending Approval'
+                                ? 'Pending'
                                 : (widget.staff.isActive ? 'Active' : 'Suspended'),
                             style: GoogleFonts.outfit(
                               fontSize: 11,

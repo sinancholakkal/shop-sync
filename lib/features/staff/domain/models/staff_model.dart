@@ -16,7 +16,7 @@ class StaffMember {
     required this.email,
     required this.permission,
     this.isActive = true,
-    this.isApproved = true,
+    this.isApproved = false,
     required this.joinedDate,
     this.shopId,
   });
@@ -69,7 +69,7 @@ class StaffMember {
       email: map['email'] as String? ?? '',
       permission: perm,
       isActive: map['isActive'] as bool? ?? true,
-      isApproved: map['isApproved'] as bool? ?? true,
+      isApproved: map['isApproved'] as bool? ?? false,
       joinedDate: map['joinedDate'] != null
           ? DateTime.tryParse(map['joinedDate'] as String) ?? DateTime.now()
           : DateTime.now(),

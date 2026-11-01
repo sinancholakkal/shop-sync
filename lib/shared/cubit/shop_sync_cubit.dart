@@ -131,10 +131,10 @@ class ShopSyncCubit extends Cubit<ShopSyncState> {
         if (staff.isNotEmpty && !isClosed) {
           StaffMember? updatedCurrent = state.currentStaff;
           if (updatedCurrent != null) {
-            updatedCurrent = staff.firstWhere(
-              (s) => s.id == updatedCurrent!.id,
-              orElse: () => staff.first,
-            );
+            final matching = staff.where((s) => s.id == updatedCurrent!.id);
+            if (matching.isNotEmpty) {
+              updatedCurrent = matching.first;
+            }
           }
           emit(state.copyWith(
             staffList: staff,
@@ -329,9 +329,26 @@ class ShopSyncCubit extends Cubit<ShopSyncState> {
       staffList: updatedList,
       currentStaff: newStaff,
       currentUserRole: UserRole.staff,
-      isAuthenticated: true,
+      isAuthenticated: isApproved,
     ));
     return newStaff;
+  }
+
+  void syncStaffMemberFromQR(StaffMember newStaff, {String? shopName}) {
+    final effectiveShopId = newStaff.shopId ?? state.shopId;
+    final effectiveShopName = (shopName != null && shopName.isNotEmpty) ? shopName : state.shopName;
+    final updatedList = [newStaff, ...state.staffList.where((s) => s.id != newStaff.id)];
+
+    _bindFirestoreStreams(effectiveShopId);
+
+    emit(state.copyWith(
+      shopId: effectiveShopId,
+      shopName: effectiveShopName,
+      staffList: updatedList,
+      currentStaff: newStaff,
+      currentUserRole: UserRole.staff,
+      isAuthenticated: newStaff.isApproved,
+    ));
   }
 
   void addInventoryItem(InventoryItem item) {

@@ -66,10 +66,10 @@ class AppStateProvider extends ChangeNotifier {
         if (staff.isNotEmpty) {
           _staffList = staff;
           if (_currentStaff != null) {
-            _currentStaff = staff.firstWhere(
-              (s) => s.id == _currentStaff!.id,
-              orElse: () => staff.first,
-            );
+            final matching = staff.where((s) => s.id == _currentStaff!.id);
+            if (matching.isNotEmpty) {
+              _currentStaff = matching.first;
+            }
           }
           notifyListeners();
         }
@@ -316,7 +316,7 @@ class AppStateProvider extends ChangeNotifier {
     _staffList.insert(0, newStaff);
     _currentStaff = newStaff;
     _currentUserRole = UserRole.staff;
-    _isAuthenticated = true;
+    _isAuthenticated = isApproved;
 
     _bindFirestoreStreams(effectiveShopId);
     FirestoreService.instance.addStaffMember(effectiveShopId, newStaff);

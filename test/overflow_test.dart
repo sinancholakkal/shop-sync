@@ -122,6 +122,11 @@ void main() {
       ));
       await tester.pumpAndSettle();
 
+      // Fill in required staff details
+      await tester.enterText(find.byType(TextField).at(0), 'Jordan Brooks');
+      await tester.enterText(find.byType(TextField).at(1), 'jordan@apexretail.io');
+      await tester.pumpAndSettle();
+
       // Submit registration on staff screen (navigates to screen with repeating pulse animation)
       await tester.ensureVisible(find.text('Submit for Owner Approval'));
       await tester.tap(find.text('Submit for Owner Approval'));

@@ -27,6 +27,8 @@ class _StaffDetailsInputScreenState extends State<StaffDetailsInputScreen> {
   final _emailController = TextEditingController();
   final _roleController = TextEditingController(text: 'Floor Staff / Cashier');
   bool _isLoading = false;
+  String? _nameError;
+  String? _emailError;
 
   @override
   void dispose() {
@@ -37,30 +39,40 @@ class _StaffDetailsInputScreenState extends State<StaffDetailsInputScreen> {
   }
 
   void _submitRegistration() {
-    // If empty in tests or fast click, fallback so test doesn't stall
-    if (_nameController.text.trim().isEmpty) {
-      _nameController.text = 'Staff Member';
-    }
-    if (_emailController.text.trim().isEmpty) {
-      _emailController.text = 'staff@apexretail.io';
+    final name = _nameController.text.trim();
+    final email = _emailController.text.trim();
+
+    setState(() {
+      _nameError = name.isEmpty
+          ? 'Please enter your full name'
+          : (name.length < 2 ? 'Name must be at least 2 characters' : null);
+
+      if (email.isEmpty) {
+        _emailError = 'Please enter your email address';
+      } else {
+        final emailRegex = RegExp(r'^[\w\.-]+@[\w\.-]+\.\w+$');
+        _emailError = emailRegex.hasMatch(email) ? null : 'Please enter a valid email address';
+      }
+    });
+
+    if (_nameError != null || _emailError != null) {
+      return;
     }
 
     setState(() => _isLoading = true);
-    Future.delayed(const Duration(milliseconds: 500), () {
+    Future.delayed(const Duration(milliseconds: 400), () {
       if (mounted) {
         setState(() => _isLoading = false);
         final appState = Provider.of<AppStateProvider>(context, listen: false);
         final newStaff = appState.addStaffMemberFromQR(
-          name: _nameController.text.trim(),
-          email: _emailController.text.trim(),
+          name: name,
+          email: email,
           shopId: widget.scannedShopId,
           shopName: widget.shopName,
         );
         try {
-          context.read<ShopSyncCubit?>()?.addStaffMemberFromQR(
-            name: _nameController.text.trim(),
-            email: _emailController.text.trim(),
-            shopId: widget.scannedShopId,
+          context.read<ShopSyncCubit?>()?.syncStaffMemberFromQR(
+            newStaff,
             shopName: widget.shopName,
           );
         } catch (_) {}
@@ -210,7 +222,7 @@ class _StaffDetailsInputScreenState extends State<StaffDetailsInputScreen> {
                   const SizedBox(height: 24),
 
                   Text(
-                    'Full Name',
+                    'Full Name *',
                     style: GoogleFonts.outfit(
                       fontSize: 13,
                       fontWeight: FontWeight.w600,
@@ -219,14 +231,20 @@ class _StaffDetailsInputScreenState extends State<StaffDetailsInputScreen> {
                   const SizedBox(height: 6),
                   TextField(
                     controller: _nameController,
-                    decoration: const InputDecoration(
+                    onChanged: (val) {
+                      if (_nameError != null) {
+                        setState(() => _nameError = null);
+                      }
+                    },
+                    decoration: InputDecoration(
                       hintText: 'e.g. Jordan Brooks',
-                      prefixIcon: Icon(Icons.person_rounded),
+                      prefixIcon: const Icon(Icons.person_rounded),
+                      errorText: _nameError,
                     ),
                   ),
                   const SizedBox(height: 16),
                   Text(
-                    'Email Address',
+                    'Email Address *',
                     style: GoogleFonts.outfit(
                       fontSize: 13,
                       fontWeight: FontWeight.w600,
@@ -236,9 +254,15 @@ class _StaffDetailsInputScreenState extends State<StaffDetailsInputScreen> {
                   TextField(
                     controller: _emailController,
                     keyboardType: TextInputType.emailAddress,
-                    decoration: const InputDecoration(
+                    onChanged: (val) {
+                      if (_emailError != null) {
+                        setState(() => _emailError = null);
+                      }
+                    },
+                    decoration: InputDecoration(
                       hintText: 'e.g. jordan.b@company.com',
-                      prefixIcon: Icon(Icons.alternate_email_rounded),
+                      prefixIcon: const Icon(Icons.alternate_email_rounded),
+                      errorText: _emailError,
                     ),
                   ),
                   const SizedBox(height: 16),

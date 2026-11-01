@@ -16,6 +16,7 @@ class MockDataRepository {
         email: 'sarah.j@apexretail.io',
         permission: StaffPermission.fullAccess,
         isActive: true,
+        isApproved: true,
         joinedDate: DateTime.now().subtract(const Duration(days: 45)),
         shopId: defaultShopId,
       ),
@@ -25,6 +26,7 @@ class MockDataRepository {
         email: 'alex.r@apexretail.io',
         permission: StaffPermission.stockCounting,
         isActive: true,
+        isApproved: true,
         joinedDate: DateTime.now().subtract(const Duration(days: 20)),
         shopId: defaultShopId,
       ),
@@ -34,6 +36,7 @@ class MockDataRepository {
         email: 'david.k@apexretail.io',
         permission: StaffPermission.readOnly,
         isActive: true,
+        isApproved: true,
         joinedDate: DateTime.now().subtract(const Duration(days: 8)),
         shopId: defaultShopId,
       ),
@@ -42,7 +45,8 @@ class MockDataRepository {
         name: 'Emma Watson',
         email: 'emma.w@apexretail.io',
         permission: StaffPermission.stockCounting,
-        isActive: false, // inactive/pending
+        isActive: false, // inactive/suspended
+        isApproved: true,
         joinedDate: DateTime.now().subtract(const Duration(days: 2)),
         shopId: defaultShopId,
       ),
