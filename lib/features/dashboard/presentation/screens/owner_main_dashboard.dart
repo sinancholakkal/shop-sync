@@ -117,8 +117,68 @@ class OwnerMainDashboard extends StatelessWidget {
                       ],
                     ),
 
+                    // Out of Stock Urgent Banner (No Item Left)
+                    if (appState.outOfStockItemCount > 0) ...[
+                      const SizedBox(height: 20),
+                      GlassContainer(
+                        borderRadius: 16,
+                        color: AppColors.accentRose.withValues(alpha: isDark ? 0.15 : 0.12),
+                        border: Border.all(color: AppColors.accentRose.withValues(alpha: 0.35)),
+                        padding: const EdgeInsets.all(14),
+                        child: Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: AppColors.accentRose.withValues(alpha: 0.2),
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(Icons.remove_circle_outline_rounded, color: AppColors.accentRose, size: 20),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Urgent: ${appState.outOfStockItemCount} product(s) are Out of Stock!',
+                                    style: GoogleFonts.outfit(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 13,
+                                      color: isDark ? Colors.white : Colors.black87,
+                                    ),
+                                  ),
+                                  Text(
+                                    'These items have 0 quantity left and cannot be sold.',
+                                    style: GoogleFonts.outfit(
+                                      fontSize: 12,
+                                      color: isDark ? Colors.white70 : Colors.black54,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            TextButton(
+                              onPressed: () {
+                                appState.setInventoryFilterCategory('No Item (Out of Stock)');
+                                appState.setActiveNavIndex(1); // switch to inventory
+                              },
+                              child: Text(
+                                'View Items',
+                                style: GoogleFonts.outfit(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 12,
+                                  color: AppColors.accentRose,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+
                     // Low Stock Alert Banner
-                    if (appState.lowStockItemCount > 0) ...[
+                    if (appState.lowStockItemCount > 0 && appState.lowStockItemCount > appState.outOfStockItemCount) ...[
                       const SizedBox(height: 20),
                       GlassContainer(
                         borderRadius: 16,
@@ -141,7 +201,7 @@ class OwnerMainDashboard extends StatelessWidget {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                    'Attention: ${appState.lowStockItemCount} product(s) are low in stock!',
+                                    'Attention: ${appState.lowStockItemCount - appState.outOfStockItemCount} product(s) are low in stock!',
                                     style: GoogleFonts.outfit(
                                       fontWeight: FontWeight.bold,
                                       fontSize: 13,
@@ -159,7 +219,10 @@ class OwnerMainDashboard extends StatelessWidget {
                               ),
                             ),
                             TextButton(
-                              onPressed: () => appState.setActiveNavIndex(1), // switch to inventory
+                              onPressed: () {
+                                appState.setInventoryFilterCategory('Low Stock');
+                                appState.setActiveNavIndex(1); // switch to inventory
+                              },
                               child: Text(
                                 'View Items',
                                 style: GoogleFonts.outfit(

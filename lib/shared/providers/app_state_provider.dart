@@ -24,6 +24,7 @@ class AppStateProvider extends ChangeNotifier {
 
   // Active navigation index in app shell
   int _activeNavIndex = 0;
+  String _inventoryFilterCategory = 'All';
 
   // Real-time Firestore Stream Subscriptions
   StreamSubscription<List<InventoryItem>>? _inventorySubscription;
@@ -108,6 +109,12 @@ class AppStateProvider extends ChangeNotifier {
   String get shopName => _shopName;
   StaffMember? get currentStaff => _currentStaff;
   int get activeNavIndex => _activeNavIndex;
+  String get inventoryFilterCategory => _inventoryFilterCategory;
+
+  void setInventoryFilterCategory(String category) {
+    _inventoryFilterCategory = category;
+    notifyListeners();
+  }
 
   List<StaffMember> get staffList => List.unmodifiable(_staffList);
   List<InventoryItem> get inventoryList => List.unmodifiable(_inventoryList);
@@ -127,6 +134,9 @@ class AppStateProvider extends ChangeNotifier {
 
   int get lowStockItemCount =>
       _inventoryList.where((item) => item.isLowStock).length;
+
+  int get outOfStockItemCount =>
+      _inventoryList.where((item) => item.isOutOfStock).length;
 
   int get activeStaffCount =>
       _staffList.where((staff) => staff.isActive && staff.isApproved).length;
@@ -257,6 +267,7 @@ class AppStateProvider extends ChangeNotifier {
     _staffList = [];
     _inventoryList = [];
     _transactionList = [];
+    _inventoryFilterCategory = 'All';
     _cancelFirestoreStreams();
     FirebaseAuthService.instance.signOut();
     SessionStorageService.instance.clearSession();

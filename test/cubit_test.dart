@@ -11,6 +11,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shop_sync_app/core/services/session_storage_service.dart';
 import 'package:shop_sync_app/features/dashboard/presentation/screens/app_shell.dart';
 import 'package:shop_sync_app/features/staff/domain/models/staff_model.dart';
+import 'package:shop_sync_app/features/inventory/presentation/screens/inventory_screen.dart';
 import 'package:shop_sync_app/main.dart';
 import 'package:shop_sync_app/shared/cubit/shop_sync_cubit.dart';
 import 'package:shop_sync_app/shared/providers/app_state_provider.dart';
@@ -285,6 +286,107 @@ void main() {
 
       final postLogoutSession = await SessionStorageService.instance.getSavedSession();
       expect(postLogoutSession, isNull);
+    });
+  });
+
+  group('Inventory Categories: Low Stock vs No Item (Out of Stock)', () {
+    testWidgets('Low Stock includes both low & 0 qty, while No Item shows strictly 0 qty', (tester) async {
+      tester.view.physicalSize = const Size(800, 1400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      final appState = AppStateProvider(initialAuth: true);
+      final inStockItem = InventoryItem(
+        id: 'item_1',
+        name: 'Wireless Mouse',
+        sku: 'WM-01',
+        category: 'Electronics',
+        price: 25.0,
+        costPrice: 15.0,
+        quantity: 20,
+        minThreshold: 5,
+        lastUpdated: DateTime.now(),
+      );
+      final lowStockItem = InventoryItem(
+        id: 'item_2',
+        name: 'USB-C Cable',
+        sku: 'USB-02',
+        category: 'Accessories',
+        price: 10.0,
+        costPrice: 4.0,
+        quantity: 3,
+        minThreshold: 5,
+        lastUpdated: DateTime.now(),
+      );
+      final outOfStockItem = InventoryItem(
+        id: 'item_3',
+        name: 'Mechanical Keyboard',
+        sku: 'KB-03',
+        category: 'Electronics',
+        price: 80.0,
+        costPrice: 50.0,
+        quantity: 0,
+        minThreshold: 5,
+        lastUpdated: DateTime.now(),
+      );
+
+      appState.addInventoryItem(inStockItem);
+      appState.addInventoryItem(lowStockItem);
+      appState.addInventoryItem(outOfStockItem);
+
+      expect(appState.lowStockItemCount, 2); // Includes USB-C (3) and Keyboard (0)
+      expect(appState.outOfStockItemCount, 1); // Only Keyboard (0)
+
+      await tester.pumpWidget(
+        MultiBlocProvider(
+          providers: [
+            BlocProvider(create: (_) => ThemeCubit()),
+            BlocProvider(create: (_) => NavBarCubit()),
+            BlocProvider(create: (_) => ShopSyncCubit(isAuthenticated: true)),
+          ],
+          child: MultiProvider(
+            providers: [
+              ChangeNotifierProvider(create: (_) => ThemeProvider()),
+              ChangeNotifierProvider.value(value: appState),
+            ],
+            child: const MaterialApp(
+              home: Scaffold(
+                body: InventoryScreen(),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // All 3 items initially visible
+      expect(find.text('Wireless Mouse'), findsOneWidget);
+      expect(find.text('USB-C Cable'), findsOneWidget);
+      expect(find.text('Mechanical Keyboard'), findsOneWidget);
+
+      // Verify Category Chips exist
+      expect(find.text('All'), findsOneWidget);
+      expect(find.text('Low Stock'), findsOneWidget);
+      expect(find.text('No Item (Out of Stock)'), findsOneWidget);
+
+      // Tap 'No Item (Out of Stock)' chip
+      await tester.tap(find.text('No Item (Out of Stock)'));
+      await tester.pumpAndSettle();
+
+      // Only out-of-stock Keyboard should be visible
+      expect(find.text('Mechanical Keyboard'), findsOneWidget);
+      expect(find.text('Wireless Mouse'), findsNothing);
+      expect(find.text('USB-C Cable'), findsNothing);
+
+      // Tap 'Low Stock' chip
+      await tester.tap(find.text('Low Stock'));
+      await tester.pumpAndSettle();
+
+      // Both Low Stock (USB Cable) and Out of Stock (Keyboard) are kept in Low Stock
+      expect(find.text('USB-C Cable'), findsOneWidget);
+      expect(find.text('Mechanical Keyboard'), findsOneWidget);
+      expect(find.text('Wireless Mouse'), findsNothing);
     });
   });
 }

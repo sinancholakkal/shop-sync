@@ -20,14 +20,6 @@ class _InventoryScreenState extends State<InventoryScreen> {
   String _searchQuery = '';
   String _selectedCategory = 'All';
 
-  final List<String> _filterCategories = [
-    'All',
-    'Low Stock',
-    'Electronics',
-    'Accessories',
-    'Apparel',
-  ];
-
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -37,6 +29,11 @@ class _InventoryScreenState extends State<InventoryScreen> {
     final canAddEdit = isOwner || permission.canModifyItems;
     final canCount = isOwner || permission.canUpdateStockCount;
 
+    // Sync selected category if preset externally (e.g. from dashboard banner)
+    if (appState.inventoryFilterCategory != _selectedCategory && _searchQuery.isEmpty) {
+      _selectedCategory = appState.inventoryFilterCategory;
+    }
+
     final filteredItems = appState.inventoryList.where((item) {
       final matchesSearch = item.name.toLowerCase().contains(_searchQuery.toLowerCase()) ||
           item.sku.toLowerCase().contains(_searchQuery.toLowerCase());
@@ -44,6 +41,11 @@ class _InventoryScreenState extends State<InventoryScreen> {
 
       if (_selectedCategory == 'All') return true;
       if (_selectedCategory == 'Low Stock') return item.isLowStock;
+      if (_selectedCategory == 'No Item (Out of Stock)' ||
+          _selectedCategory == 'No Item' ||
+          _selectedCategory == 'Out of Stock') {
+        return item.isOutOfStock;
+      }
       return item.category == _selectedCategory;
     }).toList();
 
@@ -182,43 +184,132 @@ class _InventoryScreenState extends State<InventoryScreen> {
                     const SizedBox(height: 16),
 
                     // Category chips
-                    SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      child: Row(
-                        children: _filterCategories.map((cat) {
-                          final isSelected = _selectedCategory == cat;
-                          return Padding(
-                            padding: const EdgeInsets.only(right: 8.0),
-                            child: FilterChip(
-                              label: Text(
-                                cat,
-                                style: GoogleFonts.outfit(
-                                  fontSize: 13,
-                                  fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-                                  color: isSelected
-                                      ? Colors.white
-                                      : (isDark ? Colors.white70 : Colors.black87),
+                    Builder(
+                      builder: (context) {
+                        final filterCats = <String>[
+                          'All',
+                          'Low Stock',
+                          'No Item (Out of Stock)',
+                        ];
+                        final existingCats = appState.inventoryList
+                            .map((e) => e.category.trim())
+                            .where((c) => c.isNotEmpty)
+                            .toSet();
+                        if (existingCats.isEmpty) {
+                          filterCats.addAll(['Electronics', 'Accessories', 'Apparel']);
+                        } else {
+                          filterCats.addAll(existingCats);
+                        }
+
+                        return SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          child: Row(
+                            children: filterCats.map((cat) {
+                              final isSelected = _selectedCategory == cat;
+
+                              Color selectedColor = AppColors.primary;
+                              Color? badgeColor;
+                              IconData? chipIcon;
+                              String? countBadge;
+
+                              if (cat == 'Low Stock') {
+                                chipIcon = Icons.warning_amber_rounded;
+                                selectedColor = AppColors.accentAmber;
+                                if (appState.lowStockItemCount > 0) {
+                                  countBadge = '${appState.lowStockItemCount}';
+                                  badgeColor = AppColors.accentAmber;
+                                }
+                              } else if (cat == 'No Item (Out of Stock)') {
+                                chipIcon = Icons.remove_circle_outline_rounded;
+                                selectedColor = AppColors.accentRose;
+                                if (appState.outOfStockItemCount > 0) {
+                                  countBadge = '${appState.outOfStockItemCount}';
+                                  badgeColor = AppColors.accentRose;
+                                }
+                              } else if (cat == 'All') {
+                                selectedColor = AppColors.primary;
+                                if (appState.inventoryList.isNotEmpty) {
+                                  countBadge = '${appState.inventoryList.length}';
+                                }
+                              }
+
+                              return Padding(
+                                padding: const EdgeInsets.only(right: 8.0),
+                                child: FilterChip(
+                                  avatar: chipIcon != null
+                                      ? Icon(
+                                          chipIcon,
+                                          size: 16,
+                                          color: isSelected
+                                              ? Colors.white
+                                              : (cat == 'No Item (Out of Stock)'
+                                                  ? AppColors.accentRose
+                                                  : (cat == 'Low Stock'
+                                                      ? AppColors.accentAmber
+                                                      : (isDark ? Colors.white70 : Colors.black54))),
+                                        )
+                                      : null,
+                                  label: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Text(
+                                        cat,
+                                        style: GoogleFonts.outfit(
+                                          fontSize: 13,
+                                          fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                                          color: isSelected
+                                              ? Colors.white
+                                              : (isDark ? Colors.white70 : Colors.black87),
+                                        ),
+                                      ),
+                                      if (countBadge != null) ...[
+                                        const SizedBox(width: 6),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+                                          decoration: BoxDecoration(
+                                            color: isSelected
+                                                ? Colors.white.withValues(alpha: 0.25)
+                                                : (badgeColor ?? (isDark ? Colors.white12 : Colors.black12)).withValues(alpha: 0.2),
+                                            borderRadius: BorderRadius.circular(10),
+                                          ),
+                                          child: Text(
+                                            countBadge,
+                                            style: GoogleFonts.outfit(
+                                              fontSize: 11,
+                                              fontWeight: FontWeight.bold,
+                                              color: isSelected
+                                                  ? Colors.white
+                                                  : (badgeColor ?? (isDark ? Colors.white70 : Colors.black87)),
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ],
+                                  ),
+                                  selected: isSelected,
+                                  onSelected: (_) {
+                                    setState(() => _selectedCategory = cat);
+                                    appState.setInventoryFilterCategory(cat);
+                                  },
+                                  backgroundColor: isDark
+                                      ? Colors.white.withValues(alpha: 0.05)
+                                      : Colors.black.withValues(alpha: 0.04),
+                                  selectedColor: selectedColor,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                    side: BorderSide(
+                                      color: isSelected
+                                          ? selectedColor
+                                          : (isDark ? AppColors.darkGlassBorder : AppColors.lightGlassBorder),
+                                    ),
+                                  ),
+                                  showCheckmark: false,
                                 ),
-                              ),
-                              selected: isSelected,
-                              onSelected: (_) => setState(() => _selectedCategory = cat),
-                              backgroundColor: isDark
-                                  ? Colors.white.withValues(alpha: 0.05)
-                                  : Colors.black.withValues(alpha: 0.04),
-                              selectedColor: AppColors.primary,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
-                                side: BorderSide(
-                                  color: isSelected
-                                      ? AppColors.primary
-                                      : (isDark ? AppColors.darkGlassBorder : AppColors.lightGlassBorder),
-                                ),
-                              ),
-                              showCheckmark: false,
-                            ),
-                          );
-                        }).toList(),
-                      ),
+                              );
+                            }).toList(),
+                          ),
+                        );
+                      },
                     ),
                   ],
                 ),
@@ -230,24 +321,56 @@ class _InventoryScreenState extends State<InventoryScreen> {
                 ? SliverFillRemaining(
                     hasScrollBody: false,
                     child: Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            Icons.inventory_2_outlined,
-                            size: 64,
-                            color: isDark ? Colors.white24 : Colors.black26,
-                          ),
-                          const SizedBox(height: 12),
-                          Text(
-                            'No items match your search or filter.',
-                            style: GoogleFonts.outfit(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
-                              color: isDark ? Colors.white60 : Colors.black54,
+                      child: Padding(
+                        padding: const EdgeInsets.all(32.0),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              _selectedCategory == 'No Item (Out of Stock)'
+                                  ? Icons.check_circle_outline_rounded
+                                  : (_selectedCategory == 'Low Stock'
+                                      ? Icons.check_circle_outline_rounded
+                                      : Icons.inventory_2_outlined),
+                              size: 64,
+                              color: (_selectedCategory == 'No Item (Out of Stock)' || _selectedCategory == 'Low Stock') &&
+                                      appState.inventoryList.isNotEmpty
+                                  ? AppColors.accentEmerald.withValues(alpha: 0.7)
+                                  : (isDark ? Colors.white24 : Colors.black26),
                             ),
-                          ),
-                        ],
+                            const SizedBox(height: 16),
+                            Text(
+                              appState.inventoryList.isEmpty
+                                  ? 'No products in inventory yet.'
+                                  : (_selectedCategory == 'No Item (Out of Stock)'
+                                      ? 'No items are out of stock!'
+                                      : (_selectedCategory == 'Low Stock'
+                                          ? 'All items are well-stocked!'
+                                          : 'No items match your search or filter.')),
+                              textAlign: TextAlign.center,
+                              style: GoogleFonts.outfit(
+                                fontSize: 17,
+                                fontWeight: FontWeight.w600,
+                                color: isDark ? Colors.white : Colors.black87,
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              appState.inventoryList.isEmpty
+                                  ? 'Tap "+ Add Product" at the top to add your first item.'
+                                  : (_selectedCategory == 'No Item (Out of Stock)'
+                                      ? 'All products in your shop currently have available stock.'
+                                      : (_selectedCategory == 'Low Stock'
+                                          ? 'No products have fallen below their minimum threshold.'
+                                          : 'Try adjusting your search terms or selecting another category.')),
+                              textAlign: TextAlign.center,
+                              style: GoogleFonts.outfit(
+                                fontSize: 13,
+                                color: isDark ? Colors.white60 : Colors.black54,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   )

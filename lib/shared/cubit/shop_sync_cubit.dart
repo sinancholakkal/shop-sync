@@ -48,6 +48,9 @@ class ShopSyncState {
   int get lowStockItemCount =>
       inventoryList.where((item) => item.isLowStock).length;
 
+  int get outOfStockItemCount =>
+      inventoryList.where((item) => item.isOutOfStock).length;
+
   int get activeStaffCount =>
       staffList.where((staff) => staff.isActive && staff.isApproved).length;
 
