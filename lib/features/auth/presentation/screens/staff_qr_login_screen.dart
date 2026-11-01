@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
 import 'package:shop_sync_app/core/theme/app_theme.dart';
 import 'package:shop_sync_app/core/widgets/glass_container.dart';
+import 'package:shop_sync_app/shared/providers/app_state_provider.dart';
 import 'staff_details_input_screen.dart';
 
 class StaffQrLoginScreen extends StatefulWidget {
@@ -36,12 +38,13 @@ class _StaffQrLoginScreenState extends State<StaffQrLoginScreen>
   }
 
   void _proceedWithScannedData() {
+    final appState = Provider.of<AppStateProvider>(context, listen: false);
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => const StaffDetailsInputScreen(
-          scannedShopId: 'SHOP-SYNC-8821',
-          shopName: 'Apex Retail & Tech Hub',
+        builder: (_) => StaffDetailsInputScreen(
+          scannedShopId: appState.shopId,
+          shopName: appState.shopName,
         ),
       ),
     );
@@ -240,14 +243,19 @@ class _StaffQrLoginScreenState extends State<StaffQrLoginScreen>
                   ),
 
                   const SizedBox(height: 14),
-                  Text(
-                    'Detected: Apex Retail & Tech Hub (SHOP-SYNC-8821)',
-                    textAlign: TextAlign.center,
-                    style: GoogleFonts.outfit(
-                      fontSize: 12,
-                      color: AppColors.accentEmerald,
-                      fontWeight: FontWeight.w500,
-                    ),
+                  Builder(
+                    builder: (context) {
+                      final appState = Provider.of<AppStateProvider>(context);
+                      return Text(
+                        'Detected: ${appState.shopName} (${appState.shopId})',
+                        textAlign: TextAlign.center,
+                        style: GoogleFonts.outfit(
+                          fontSize: 12,
+                          color: AppColors.accentEmerald,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      );
+                    },
                   ),
                 ],
               ),

@@ -14,18 +14,12 @@ class OwnerDashboardQrScreen extends StatefulWidget {
 }
 
 class _OwnerDashboardQrScreenState extends State<OwnerDashboardQrScreen> {
-  late String _inviteToken;
+  String? _inviteToken;
 
-  @override
-  void initState() {
-    super.initState();
-    _refreshToken();
-  }
-
-  void _refreshToken() {
+  void _refreshToken(String shopId) {
     setState(() {
       _inviteToken =
-          'shopsync://join?shop=SHOP-SYNC-8821&auth=${DateTime.now().millisecondsSinceEpoch}';
+          'shopsync://join?shop=$shopId&auth=${DateTime.now().millisecondsSinceEpoch}';
     });
   }
 
@@ -115,7 +109,8 @@ class _OwnerDashboardQrScreenState extends State<OwnerDashboardQrScreen> {
                       ],
                     ),
                     child: QrImageView(
-                      data: _inviteToken,
+                      data: _inviteToken ??
+                          'shopsync://join?shop=${appState.shopId}&auth=1',
                       version: QrVersions.auto,
                       size: 200.0,
                       gapless: true,
@@ -180,7 +175,7 @@ class _OwnerDashboardQrScreenState extends State<OwnerDashboardQrScreen> {
                             borderRadius: BorderRadius.circular(14),
                           ),
                         ),
-                        onPressed: _refreshToken,
+                        onPressed: () => _refreshToken(appState.shopId),
                         icon: const Icon(Icons.refresh_rounded, size: 18),
                         label: Text(
                           'Refresh Code',
