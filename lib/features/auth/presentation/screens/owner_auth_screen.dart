@@ -552,6 +552,64 @@ class _OwnerAuthScreenState extends State<OwnerAuthScreen> {
                           ),
                         ),
                       ] else ...[
+                        // Prominent Code Display Chip
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                          margin: const EdgeInsets.only(bottom: 20),
+                          decoration: BoxDecoration(
+                            color: AppColors.primary.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.mark_email_read_rounded, size: 20, color: AppColors.primaryLight),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      'Verification Code: $_currentOtp',
+                                      style: GoogleFonts.outfit(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.bold,
+                                        color: isDark ? Colors.white : Colors.black87,
+                                      ),
+                                    ),
+                                    Text(
+                                      'Enter this 6-digit code below to enter dashboard.',
+                                      style: GoogleFonts.outfit(
+                                        fontSize: 11,
+                                        color: isDark ? Colors.white70 : Colors.black54,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              TextButton(
+                                style: TextButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                  visualDensity: VisualDensity.compact,
+                                ),
+                                onPressed: () {
+                                  for (int i = 0; i < 6 && i < _currentOtp.length; i++) {
+                                    _otpControllers[i].text = _currentOtp[i];
+                                  }
+                                },
+                                child: Text(
+                                  'Auto Fill',
+                                  style: GoogleFonts.outfit(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.bold,
+                                    color: AppColors.primaryLight,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+
                         // OTP Input State
                         Row(
                           children: List.generate(6, (index) {
