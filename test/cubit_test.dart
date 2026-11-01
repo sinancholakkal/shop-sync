@@ -12,6 +12,7 @@ import 'package:shop_sync_app/core/services/session_storage_service.dart';
 import 'package:shop_sync_app/features/dashboard/presentation/screens/app_shell.dart';
 import 'package:shop_sync_app/features/staff/domain/models/staff_model.dart';
 import 'package:shop_sync_app/features/inventory/presentation/screens/inventory_screen.dart';
+import 'package:shop_sync_app/features/inventory/presentation/widgets/add_edit_item_dialog.dart';
 import 'package:shop_sync_app/main.dart';
 import 'package:shop_sync_app/shared/cubit/shop_sync_cubit.dart';
 import 'package:shop_sync_app/shared/providers/app_state_provider.dart';
@@ -685,6 +686,93 @@ void main() {
       expect(addSuccess, isTrue);
       expect(state.allProductCategories.length, 5);
       expect(state.allProductCategories.contains('Footwear'), isTrue);
+    });
+
+    test('InventoryItem model calculates margin, profit, and serializes correctly', () {
+      final item = InventoryItem(
+        id: 'inv_profit_test',
+        name: 'Wireless Gaming Mouse',
+        sku: 'MS-W-01',
+        category: 'Electronics',
+        costPrice: 50.0,
+        price: 65.0,
+        marginPercent: 30.0,
+        quantity: 20,
+        minThreshold: 5,
+        lastUpdated: DateTime.now(),
+      );
+
+      expect(item.profitPerUnit, 15.0);
+      expect(item.calculatedMarginPercent, 30.0);
+      expect(item.effectiveMarginPercent, 30.0);
+
+      final map = item.toMap();
+      expect(map['costPrice'], 50.0);
+      expect(map['price'], 65.0);
+      expect(map['marginPercent'], 30.0);
+
+      final restored = InventoryItem.fromMap(map, 'inv_profit_test');
+      expect(restored.costPrice, 50.0);
+      expect(restored.price, 65.0);
+      expect(restored.marginPercent, 30.0);
+      expect(restored.profitPerUnit, 15.0);
+    });
+
+    testWidgets('AddEditItemDialog auto-calculates retail price from cost price and margin percentage', (tester) async {
+      InventoryItem? savedItem;
+
+      await tester.pumpWidget(
+        MultiProvider(
+          providers: [
+            ChangeNotifierProvider(create: (_) => ThemeProvider()),
+            ChangeNotifierProvider(create: (_) => AppStateProvider()),
+          ],
+          child: MaterialApp(
+            home: Scaffold(
+              body: AddEditItemDialog(
+                onSave: (item) => savedItem = item,
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Enter Product Name
+      final nameFinder = find.widgetWithText(TextField, 'e.g. Mechanical RGB Keyboard');
+      await tester.enterText(nameFinder, 'Wireless Mechanical Keyboard');
+
+      // Enter SKU
+      final skuFinder = find.widgetWithText(TextField, 'e.g. PER-MK-104');
+      await tester.enterText(skuFinder, 'KB-W-99');
+
+      // Enter Cost Price = 100.00
+      final costPriceFinder = find.widgetWithText(TextField, '0.00').first;
+      await tester.enterText(costPriceFinder, '100.00');
+      await tester.pump();
+
+      // Tap Preset '+25%' chip
+      final chip25 = find.text('+25%');
+      expect(chip25, findsOneWidget);
+      await tester.tap(chip25);
+      await tester.pump();
+
+      // Retail Price should now be automatically calculated as 125.00
+      expect(find.text('125.00'), findsOneWidget);
+
+      // Scroll to submit button and tap
+      final submitFinder = find.text('Create Inventory Item');
+      await tester.ensureVisible(submitFinder);
+      await tester.pumpAndSettle();
+      await tester.tap(submitFinder);
+      await tester.pumpAndSettle();
+
+      expect(savedItem, isNotNull);
+      expect(savedItem!.name, 'Wireless Mechanical Keyboard');
+      expect(savedItem!.costPrice, 100.00);
+      expect(savedItem!.marginPercent, 25.0);
+      expect(savedItem!.price, 125.00);
+      expect(savedItem!.profitPerUnit, 25.0);
     });
   });
 }

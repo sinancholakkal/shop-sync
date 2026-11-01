@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shop_sync_app/core/theme/app_theme.dart';
 import 'package:shop_sync_app/core/widgets/glass_container.dart';
 import 'package:shop_sync_app/features/inventory/domain/models/inventory_item.dart';
@@ -36,11 +37,13 @@ class AddEditItemDialog extends StatefulWidget {
 class _AddEditItemDialogState extends State<AddEditItemDialog> {
   late TextEditingController _nameController;
   late TextEditingController _skuController;
-  late TextEditingController _priceController;
   late TextEditingController _costPriceController;
+  late TextEditingController _marginController;
+  late TextEditingController _priceController;
   late TextEditingController _quantityController;
   late TextEditingController _minThresholdController;
   String _selectedCategory = 'Electronics';
+  bool _isCalculating = false;
 
   @override
   void initState() {
@@ -48,12 +51,42 @@ class _AddEditItemDialogState extends State<AddEditItemDialog> {
     final item = widget.item;
     _nameController = TextEditingController(text: item?.name ?? '');
     _skuController = TextEditingController(text: item?.sku ?? '');
-    _priceController = TextEditingController(text: item != null ? item.price.toString() : '');
-    _costPriceController = TextEditingController(text: item != null ? item.costPrice.toString() : '');
+    _costPriceController = TextEditingController(
+      text: item != null ? (item.costPrice > 0 ? item.costPrice.toStringAsFixed(2) : '') : '',
+    );
+    _priceController = TextEditingController(
+      text: item != null ? (item.price > 0 ? item.price.toStringAsFixed(2) : '') : '',
+    );
+
+    double initialMargin = 20.0;
+    if (item != null) {
+      if (item.marginPercent != null) {
+        initialMargin = item.marginPercent!;
+      } else if (item.costPrice > 0 && item.price > 0) {
+        initialMargin = item.calculatedMarginPercent;
+      }
+    }
+    _marginController = TextEditingController(
+      text: initialMargin.toStringAsFixed(initialMargin.truncateToDouble() == initialMargin ? 0 : 1),
+    );
+
     _quantityController = TextEditingController(text: item != null ? item.quantity.toString() : '10');
     _minThresholdController = TextEditingController(text: item != null ? item.minThreshold.toString() : '5');
     if (item != null && item.category.isNotEmpty) {
       _selectedCategory = item.category;
+    }
+
+    if (item == null) {
+      SharedPreferences.getInstance().then((prefs) {
+        final savedMargin = prefs.getDouble('preferred_margin_percent');
+        if (savedMargin != null && mounted && _marginController.text == '20') {
+          setState(() {
+            _marginController.text = savedMargin.toStringAsFixed(
+              savedMargin.truncateToDouble() == savedMargin ? 0 : 1,
+            );
+          });
+        }
+      });
     }
   }
 
@@ -61,20 +94,90 @@ class _AddEditItemDialogState extends State<AddEditItemDialog> {
   void dispose() {
     _nameController.dispose();
     _skuController.dispose();
-    _priceController.dispose();
     _costPriceController.dispose();
+    _marginController.dispose();
+    _priceController.dispose();
     _quantityController.dispose();
     _minThresholdController.dispose();
     super.dispose();
   }
 
+  void _onCostPriceChanged(String val) {
+    if (_isCalculating) return;
+    final cost = double.tryParse(val.trim());
+    final margin = double.tryParse(_marginController.text.trim());
+    if (cost != null && cost >= 0 && margin != null) {
+      _isCalculating = true;
+      final retail = cost + (cost * (margin / 100.0));
+      _priceController.text = retail > 0 ? retail.toStringAsFixed(2) : '';
+      _isCalculating = false;
+      setState(() {});
+    } else {
+      setState(() {});
+    }
+  }
+
+  void _onMarginChanged(String val) {
+    if (_isCalculating) return;
+    final margin = double.tryParse(val.trim());
+    final cost = double.tryParse(_costPriceController.text.trim());
+    if (cost != null && cost >= 0 && margin != null) {
+      _isCalculating = true;
+      final retail = cost + (cost * (margin / 100.0));
+      _priceController.text = retail > 0 ? retail.toStringAsFixed(2) : '';
+      _isCalculating = false;
+      setState(() {});
+    } else {
+      setState(() {});
+    }
+  }
+
+  void _setMarginPreset(double percent) {
+    _isCalculating = true;
+    _marginController.text = percent.truncateToDouble() == percent
+        ? percent.toStringAsFixed(0)
+        : percent.toStringAsFixed(1);
+    final cost = double.tryParse(_costPriceController.text.trim());
+    if (cost != null && cost >= 0) {
+      final retail = cost + (cost * (percent / 100.0));
+      _priceController.text = retail > 0 ? retail.toStringAsFixed(2) : '';
+    }
+    _isCalculating = false;
+    setState(() {});
+  }
+
+  void _onRetailPriceChanged(String val) {
+    if (_isCalculating) return;
+    final retail = double.tryParse(val.trim());
+    final cost = double.tryParse(_costPriceController.text.trim());
+    if (retail != null && cost != null && cost > 0) {
+      _isCalculating = true;
+      final margin = ((retail - cost) / cost) * 100.0;
+      if (margin >= 0) {
+        _marginController.text = margin.truncateToDouble() == margin
+            ? margin.toStringAsFixed(0)
+            : margin.toStringAsFixed(1);
+      }
+      _isCalculating = false;
+      setState(() {});
+    } else {
+      setState(() {});
+    }
+  }
+
   void _submit() {
     final name = _nameController.text.trim();
     final sku = _skuController.text.trim().toUpperCase();
-    final price = double.tryParse(_priceController.text) ?? 0.0;
-    final costPrice = double.tryParse(_costPriceController.text) ?? (price * 0.6);
-    final quantity = int.tryParse(_quantityController.text) ?? 0;
-    final minThreshold = int.tryParse(_minThresholdController.text) ?? 5;
+    final costPrice = double.tryParse(_costPriceController.text.trim()) ?? 0.0;
+    final marginPercent = double.tryParse(_marginController.text.trim()) ?? 20.0;
+    var price = double.tryParse(_priceController.text.trim()) ?? 0.0;
+
+    if (price <= 0 && costPrice > 0) {
+      price = costPrice + (costPrice * (marginPercent / 100.0));
+    }
+
+    final quantity = int.tryParse(_quantityController.text.trim()) ?? 0;
+    final minThreshold = int.tryParse(_minThresholdController.text.trim()) ?? 5;
 
     if (name.isEmpty || sku.isEmpty || price <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -83,6 +186,11 @@ class _AddEditItemDialogState extends State<AddEditItemDialog> {
       return;
     }
 
+    // Save preferred margin locally
+    SharedPreferences.getInstance().then((prefs) {
+      prefs.setDouble('preferred_margin_percent', marginPercent);
+    });
+
     final item = InventoryItem(
       id: widget.item?.id ?? 'inv_${DateTime.now().millisecondsSinceEpoch}',
       name: name,
@@ -90,6 +198,7 @@ class _AddEditItemDialogState extends State<AddEditItemDialog> {
       category: _selectedCategory,
       price: price,
       costPrice: costPrice,
+      marginPercent: marginPercent,
       quantity: quantity,
       minThreshold: minThreshold,
       lastUpdated: DateTime.now(),
@@ -513,21 +622,10 @@ class _AddEditItemDialogState extends State<AddEditItemDialog> {
                       ],
                     );
 
-                    final priceField = Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Retail Price (\$)', style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w600)),
-                        const SizedBox(height: 6),
-                        TextField(
-                          controller: _priceController,
-                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                          decoration: const InputDecoration(
-                            hintText: '0.00',
-                            prefixIcon: Icon(Icons.attach_money_rounded),
-                          ),
-                        ),
-                      ],
-                    );
+                    final costVal = double.tryParse(_costPriceController.text.trim()) ?? 0.0;
+                    final priceVal = double.tryParse(_priceController.text.trim()) ?? 0.0;
+                    final profitPerUnit = priceVal - costVal;
+                    final currentMargin = double.tryParse(_marginController.text.trim());
 
                     final costField = Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -537,6 +635,7 @@ class _AddEditItemDialogState extends State<AddEditItemDialog> {
                         TextField(
                           controller: _costPriceController,
                           keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                          onChanged: _onCostPriceChanged,
                           decoration: const InputDecoration(
                             hintText: '0.00',
                             prefixIcon: Icon(Icons.price_change_outlined),
@@ -544,6 +643,168 @@ class _AddEditItemDialogState extends State<AddEditItemDialog> {
                         ),
                       ],
                     );
+
+                    final marginField = Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Flexible(
+                              child: Text(
+                                'Margin (%)',
+                                style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w600),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            if (costVal > 0 && profitPerUnit > 0) ...[
+                              const SizedBox(width: 4),
+                              Flexible(
+                                child: Text(
+                                  '+\$${profitPerUnit.toStringAsFixed(2)} profit',
+                                  style: GoogleFonts.outfit(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                    color: AppColors.accentEmerald,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                        const SizedBox(height: 6),
+                        TextField(
+                          controller: _marginController,
+                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                          onChanged: _onMarginChanged,
+                          decoration: InputDecoration(
+                            hintText: '20',
+                            prefixIcon: const Icon(Icons.percent_rounded),
+                            suffixText: '%',
+                            suffixStyle: GoogleFonts.outfit(
+                              fontWeight: FontWeight.bold,
+                              color: AppColors.primaryLight,
+                            ),
+                          ),
+                        ),
+                      ],
+                    );
+
+                    final presetChips = Wrap(
+                      spacing: 6,
+                      runSpacing: 6,
+                      children: [10.0, 15.0, 20.0, 25.0, 30.0, 50.0].map((preset) {
+                        final isSelected = currentMargin != null && (currentMargin - preset).abs() < 0.01;
+                        return InkWell(
+                          borderRadius: BorderRadius.circular(8),
+                          onTap: () => _setMarginPreset(preset),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: isSelected
+                                  ? AppColors.primary.withValues(alpha: 0.25)
+                                  : (isDark
+                                      ? Colors.white.withValues(alpha: 0.05)
+                                      : Colors.black.withValues(alpha: 0.04)),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(
+                                color: isSelected
+                                    ? AppColors.primaryLight
+                                    : (isDark ? AppColors.darkGlassBorder : AppColors.lightGlassBorder),
+                              ),
+                            ),
+                            child: Text(
+                              '+${preset.toInt()}%',
+                              style: GoogleFonts.outfit(
+                                fontSize: 11,
+                                fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                                color: isSelected
+                                    ? AppColors.primaryLight
+                                    : (isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary),
+                              ),
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    );
+
+                    final priceField = Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Flexible(
+                              child: Text(
+                                'Retail Price (\$)',
+                                style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w600),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            const SizedBox(width: 4),
+                            Flexible(
+                              child: Text(
+                                '(Selling)',
+                                style: GoogleFonts.outfit(
+                                  fontSize: 11,
+                                  color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 6),
+                        TextField(
+                          controller: _priceController,
+                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                          onChanged: _onRetailPriceChanged,
+                          decoration: const InputDecoration(
+                            hintText: '0.00',
+                            prefixIcon: Icon(Icons.attach_money_rounded),
+                          ),
+                        ),
+                      ],
+                    );
+
+                    Widget? summaryBanner;
+                    if (costVal > 0 && priceVal > 0) {
+                      final isProfit = profitPerUnit >= 0;
+                      final badgeColor = isProfit ? AppColors.accentEmerald : AppColors.accentRose;
+                      final effectiveMargin = ((priceVal - costVal) / costVal) * 100.0;
+
+                      summaryBanner = Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                        decoration: BoxDecoration(
+                          color: badgeColor.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: badgeColor.withValues(alpha: 0.3)),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              isProfit ? Icons.trending_up_rounded : Icons.trending_down_rounded,
+                              size: 18,
+                              color: badgeColor,
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                isProfit
+                                    ? 'Profit: \$${profitPerUnit.toStringAsFixed(2)} per item (${effectiveMargin.toStringAsFixed(1)}% margin)'
+                                    : 'Warning: Selling at a loss of \$${(-profitPerUnit).toStringAsFixed(2)} per item',
+                                style: GoogleFonts.outfit(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: isDark ? Colors.white : Colors.black87,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    }
 
                     final qtyField = Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -579,14 +840,23 @@ class _AddEditItemDialogState extends State<AddEditItemDialog> {
 
                     if (isNarrow) {
                       return Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
                           skuField,
                           const SizedBox(height: 16),
                           categoryField,
                           const SizedBox(height: 16),
-                          priceField,
-                          const SizedBox(height: 16),
                           costField,
+                          const SizedBox(height: 16),
+                          marginField,
+                          const SizedBox(height: 8),
+                          presetChips,
+                          const SizedBox(height: 16),
+                          priceField,
+                          if (summaryBanner != null) ...[
+                            const SizedBox(height: 12),
+                            summaryBanner,
+                          ],
                           const SizedBox(height: 16),
                           qtyField,
                           const SizedBox(height: 16),
@@ -596,6 +866,7 @@ class _AddEditItemDialogState extends State<AddEditItemDialog> {
                     }
 
                     return Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
                         Row(
                           children: [
@@ -606,12 +877,28 @@ class _AddEditItemDialogState extends State<AddEditItemDialog> {
                         ),
                         const SizedBox(height: 16),
                         Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Expanded(child: priceField),
-                            const SizedBox(width: 16),
                             Expanded(child: costField),
+                            const SizedBox(width: 16),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  marginField,
+                                  const SizedBox(height: 6),
+                                  presetChips,
+                                ],
+                              ),
+                            ),
                           ],
                         ),
+                        const SizedBox(height: 16),
+                        priceField,
+                        if (summaryBanner != null) ...[
+                          const SizedBox(height: 12),
+                          summaryBanner,
+                        ],
                         const SizedBox(height: 16),
                         Row(
                           children: [
