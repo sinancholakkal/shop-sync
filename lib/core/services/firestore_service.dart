@@ -234,6 +234,50 @@ class FirestoreService {
     }
   }
 
+  Future<void> renameCategory(String shopId, String oldCategory, String newCategory) async {
+    try {
+      final firestore = _firestore;
+      if (firestore == null || shopId.isEmpty) return;
+
+      final trimmedOld = oldCategory.trim();
+      final trimmedNew = newCategory.trim();
+      if (trimmedOld.isEmpty || trimmedNew.isEmpty) return;
+
+      final batch = firestore.batch();
+      final oldRef = firestore.collection('shops').doc(shopId).collection('categories').doc(trimmedOld);
+      final newRef = firestore.collection('shops').doc(shopId).collection('categories').doc(trimmedNew);
+
+      batch.delete(oldRef);
+      batch.set(newRef, {
+        'name': trimmedNew,
+        'createdAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+
+      await batch.commit();
+    } catch (e) {
+      debugPrint('FirestoreService: renameCategory notice: $e');
+    }
+  }
+
+  Future<void> deleteCategory(String shopId, String category) async {
+    try {
+      final firestore = _firestore;
+      if (firestore == null || shopId.isEmpty) return;
+
+      final trimmed = category.trim();
+      if (trimmed.isEmpty) return;
+
+      await firestore
+          .collection('shops')
+          .doc(shopId)
+          .collection('categories')
+          .doc(trimmed)
+          .delete();
+    } catch (e) {
+      debugPrint('FirestoreService: deleteCategory notice: $e');
+    }
+  }
+
   // ----------------------------------------------------
   // Staff Real-time Streams & CRUD
   // ----------------------------------------------------

@@ -11,6 +11,7 @@ import 'package:shop_sync_app/features/auth/presentation/screens/staff_pending_a
 import 'package:shop_sync_app/features/auth/presentation/screens/staff_qr_login_screen.dart';
 import 'package:shop_sync_app/features/inventory/domain/models/inventory_item.dart';
 import 'package:shop_sync_app/features/inventory/presentation/widgets/add_edit_item_dialog.dart';
+import 'package:shop_sync_app/features/inventory/presentation/widgets/category_manager_modal.dart';
 import 'package:shop_sync_app/features/staff/domain/models/staff_model.dart';
 import 'package:shop_sync_app/features/staff/presentation/widgets/permission_modal.dart';
 import 'package:shop_sync_app/main.dart';
@@ -212,6 +213,20 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Edit Inventory Product'), findsOneWidget);
+    });
+
+    testWidgets('CategoryManagerModal no overflow on compact mobile (320x568)', (tester) async {
+      tester.view.physicalSize = const Size(320, 568);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await tester.pumpWidget(_buildTestApp(
+        child: const CategoryManagerModal(),
+      ));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Manage Categories'), findsOneWidget);
     });
   });
 }

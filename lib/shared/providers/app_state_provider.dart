@@ -22,17 +22,20 @@ class AppStateProvider extends ChangeNotifier {
   List<InventoryItem> _inventoryList = [];
   List<ShopTransaction> _transactionList = [];
 
-  // Static default product categories
+  // Category limits & defaults
+  static const int maxCategoryLimit = 5;
   static const List<String> defaultProductCategories = [
     'Electronics',
     'Accessories',
-    'Apparel',
     'Groceries',
-    'Office Supplies',
   ];
 
-  // Dynamic custom categories added by permitted users / staff
-  final List<String> _customCategories = [];
+  // Active product categories list (capped at maxCategoryLimit = 5)
+  List<String> _categories = [
+    'Electronics',
+    'Accessories',
+    'Groceries',
+  ];
 
   // Active navigation index in app shell
   int _activeNavIndex = 0;
@@ -97,14 +100,20 @@ class AppStateProvider extends ChangeNotifier {
       _categoriesSubscription = FirestoreService.instance
           .streamCategories(targetShopId)
           .listen((cats) {
-        for (final c in cats) {
-          final trimmed = c.trim();
-          if (trimmed.isNotEmpty &&
-              !_customCategories.any((x) => x.toLowerCase() == trimmed.toLowerCase())) {
-            _customCategories.add(trimmed);
+        if (cats.isNotEmpty) {
+          final list = <String>[];
+          for (final c in cats) {
+            final trimmed = c.trim();
+            if (trimmed.isNotEmpty && !list.any((x) => x.toLowerCase() == trimmed.toLowerCase())) {
+              list.add(trimmed);
+              if (list.length >= maxCategoryLimit) break;
+            }
+          }
+          if (list.isNotEmpty) {
+            _categories = list;
+            notifyListeners();
           }
         }
-        notifyListeners();
       }, onError: (err) {
         debugPrint('AppStateProvider: Categories stream error: $err');
       });
@@ -155,7 +164,11 @@ class AppStateProvider extends ChangeNotifier {
   List<StaffMember> get staffList => List.unmodifiable(_staffList);
   List<InventoryItem> get inventoryList => List.unmodifiable(_inventoryList);
   List<ShopTransaction> get transactionList => List.unmodifiable(_transactionList);
-  List<String> get customCategories => List.unmodifiable(_customCategories);
+  List<String> get customCategories => List.unmodifiable(_categories);
+
+  int get maxCategories => maxCategoryLimit;
+  bool get isCategoryLimitReached => allProductCategories.length >= maxCategoryLimit;
+  int get remainingCategorySlots => (maxCategoryLimit - allProductCategories.length).clamp(0, maxCategoryLimit);
 
   StaffPermission get effectivePermission {
     if (isOwner) return StaffPermission.fullAccess;
@@ -163,33 +176,24 @@ class AppStateProvider extends ChangeNotifier {
   }
 
   /// Role-based permission check:
-  /// Shop Owner and Staff with Full Access (canModifyItems) can add product categories.
+  /// Shop Owner and Staff with Full Access (canModifyItems) can add/edit/delete product categories.
   /// Staff with Stock Counting Only or Read-Only are restricted.
   bool get canManageCategories => isOwner || effectivePermission.canModifyItems;
 
-  /// Aggregated list of all available product categories:
-  /// Default categories + dynamic user/staff-added categories + categories present in existing inventory items
+  /// Aggregated list of all available product categories (capped at maxCategoryLimit = 5)
   List<String> get allProductCategories {
-    final Map<String, String> categoryMap = {}; // lowercase key -> preserved casing
-    for (final cat in defaultProductCategories) {
-      categoryMap[cat.toLowerCase()] = cat;
-    }
-    for (final cat in _customCategories) {
-      final trimmed = cat.trim();
-      if (trimmed.isNotEmpty) {
-        categoryMap[trimmed.toLowerCase()] = trimmed;
-      }
-    }
     for (final item in _inventoryList) {
       final trimmed = item.category.trim();
-      if (trimmed.isNotEmpty) {
-        categoryMap[trimmed.toLowerCase()] = trimmed;
+      if (trimmed.isNotEmpty &&
+          _categories.length < maxCategoryLimit &&
+          !_categories.any((c) => c.toLowerCase() == trimmed.toLowerCase())) {
+        _categories.add(trimmed);
       }
     }
-    return categoryMap.values.toList();
+    return List.unmodifiable(_categories);
   }
 
-  /// Adds a new product category if caller has permission (Shop Owner or Full Access Staff)
+  /// Adds a new product category (maximum 5 categories allowed per shop)
   bool addCategory(String category) {
     if (!canManageCategories) {
       debugPrint('AppStateProvider: Unauthorized category add attempt by non-permitted user/staff');
@@ -201,11 +205,111 @@ class AppStateProvider extends ChangeNotifier {
 
     // Check if category already exists (case-insensitive)
     final exists = allProductCategories.any((c) => c.toLowerCase() == trimmed.toLowerCase());
-    if (!exists) {
-      _customCategories.add(trimmed);
-      FirestoreService.instance.addCategory(_shopId, trimmed);
-      notifyListeners();
+    if (exists) return true;
+
+    // Hard Limit Check: Maximum 5 categories allowed
+    if (allProductCategories.length >= maxCategoryLimit) {
+      debugPrint('AppStateProvider: Category limit ($maxCategoryLimit) reached. Cannot add "$trimmed".');
+      return false;
     }
+
+    _categories.add(trimmed);
+    FirestoreService.instance.addCategory(_shopId, trimmed);
+    notifyListeners();
+    return true;
+  }
+
+  /// Edits / Renames an existing product category and updates all associated inventory items
+  bool editCategory(String oldName, String newName) {
+    if (!canManageCategories) {
+      debugPrint('AppStateProvider: Unauthorized category edit attempt by non-permitted user/staff');
+      return false;
+    }
+
+    final trimmedOld = oldName.trim();
+    final trimmedNew = newName.trim();
+
+    if (trimmedOld.isEmpty || trimmedNew.isEmpty) return false;
+    if (trimmedOld.toLowerCase() == trimmedNew.toLowerCase()) return true;
+
+    // Check if target name conflicts with another existing category
+    final conflict = allProductCategories.any(
+      (c) => c.toLowerCase() == trimmedNew.toLowerCase() && c.toLowerCase() != trimmedOld.toLowerCase(),
+    );
+    if (conflict) {
+      debugPrint('AppStateProvider: Category name already in use: $trimmedNew');
+      return false;
+    }
+
+    // 1. Rename category in _categories list
+    final idx = _categories.indexWhere((c) => c.toLowerCase() == trimmedOld.toLowerCase());
+    if (idx != -1) {
+      _categories[idx] = trimmedNew;
+    } else {
+      _categories.add(trimmedNew);
+    }
+
+    // 2. Cascade rename to all inventory items
+    for (int i = 0; i < _inventoryList.length; i++) {
+      if (_inventoryList[i].category.trim().toLowerCase() == trimmedOld.toLowerCase()) {
+        final updatedItem = _inventoryList[i].copyWith(
+          category: trimmedNew,
+          lastUpdated: DateTime.now(),
+        );
+        _inventoryList[i] = updatedItem;
+        FirestoreService.instance.updateInventoryItem(_shopId, updatedItem);
+      }
+    }
+
+    // 3. Update active filter category if needed
+    if (_inventoryFilterCategory.toLowerCase() == trimmedOld.toLowerCase()) {
+      _inventoryFilterCategory = trimmedNew;
+    }
+
+    // 4. Update Firestore category doc
+    FirestoreService.instance.renameCategory(_shopId, trimmedOld, trimmedNew);
+
+    notifyListeners();
+    return true;
+  }
+
+  /// Deletes a product category (if more than 1 category exists) and reassigns any items
+  bool deleteCategory(String categoryName) {
+    if (!canManageCategories) {
+      debugPrint('AppStateProvider: Unauthorized category delete attempt by non-permitted user/staff');
+      return false;
+    }
+
+    if (allProductCategories.length <= 1) {
+      debugPrint('AppStateProvider: Cannot delete the only remaining category');
+      return false;
+    }
+
+    final trimmed = categoryName.trim();
+    final idx = _categories.indexWhere((c) => c.toLowerCase() == trimmed.toLowerCase());
+    if (idx == -1) return false;
+
+    _categories.removeAt(idx);
+    final fallbackCategory = _categories.first;
+
+    // Reassign any inventory items that were using the deleted category
+    for (int i = 0; i < _inventoryList.length; i++) {
+      if (_inventoryList[i].category.trim().toLowerCase() == trimmed.toLowerCase()) {
+        final updatedItem = _inventoryList[i].copyWith(
+          category: fallbackCategory,
+          lastUpdated: DateTime.now(),
+        );
+        _inventoryList[i] = updatedItem;
+        FirestoreService.instance.updateInventoryItem(_shopId, updatedItem);
+      }
+    }
+
+    if (_inventoryFilterCategory.toLowerCase() == trimmed.toLowerCase()) {
+      _inventoryFilterCategory = 'All';
+    }
+
+    FirestoreService.instance.deleteCategory(_shopId, trimmed);
+    notifyListeners();
     return true;
   }
 
@@ -351,7 +455,7 @@ class AppStateProvider extends ChangeNotifier {
     _staffList = [];
     _inventoryList = [];
     _transactionList = [];
-    _customCategories.clear();
+    _categories = List.from(defaultProductCategories);
     _inventoryFilterCategory = 'All';
     _cancelFirestoreStreams();
     FirebaseAuthService.instance.signOut();

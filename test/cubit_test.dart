@@ -560,6 +560,132 @@ void main() {
 
       expect(find.text('Add Category'), findsNothing);
     });
+
+    test('Strict 5-category limit is enforced and prevents adding more than 5 categories', () {
+      final state = AppStateProvider(initialAuth: true);
+      state.loginAsOwner('owner@shop.io', shopId: 'SHOP-LIMIT', shopName: 'Limit Shop');
+
+      // Starts with 3 categories: Electronics, Accessories, Groceries
+      expect(state.allProductCategories.length, 3);
+      expect(state.isCategoryLimitReached, isFalse);
+      expect(state.remainingCategorySlots, 2);
+
+      // Add 4th category -> Success
+      final add4 = state.addCategory('Pet Supplies');
+      expect(add4, isTrue);
+      expect(state.allProductCategories.length, 4);
+      expect(state.isCategoryLimitReached, isFalse);
+      expect(state.remainingCategorySlots, 1);
+
+      // Add 5th category -> Success
+      final add5 = state.addCategory('Home Decor');
+      expect(add5, isTrue);
+      expect(state.allProductCategories.length, 5);
+      expect(state.isCategoryLimitReached, isTrue);
+      expect(state.remainingCategorySlots, 0);
+
+      // Attempt to add 6th category -> Must be strictly BLOCKED!
+      final add6 = state.addCategory('Automotive');
+      expect(add6, isFalse);
+      expect(state.allProductCategories.length, 5);
+      expect(state.allProductCategories.contains('Automotive'), isFalse);
+    });
+
+    test('Category name editing renames category and updates all associated inventory items', () {
+      final state = AppStateProvider(initialAuth: true);
+      state.loginAsOwner('owner@shop.io', shopId: 'SHOP-EDIT', shopName: 'Edit Shop');
+
+      // Add inventory items with 'Electronics' category
+      final mouse = InventoryItem(
+        id: 'item_mouse',
+        name: 'Gaming Mouse',
+        sku: 'PER-MOU-01',
+        category: 'Electronics',
+        price: 49.99,
+        costPrice: 25.0,
+        quantity: 20,
+        minThreshold: 5,
+        lastUpdated: DateTime.now(),
+      );
+      final keyboard = InventoryItem(
+        id: 'item_kb',
+        name: 'Mechanical Keyboard',
+        sku: 'PER-KB-01',
+        category: 'Electronics',
+        price: 89.99,
+        costPrice: 45.0,
+        quantity: 12,
+        minThreshold: 3,
+        lastUpdated: DateTime.now(),
+      );
+      final groceryItem = InventoryItem(
+        id: 'item_apple',
+        name: 'Organic Apples',
+        sku: 'GRO-APP-01',
+        category: 'Groceries',
+        price: 4.99,
+        costPrice: 2.0,
+        quantity: 50,
+        minThreshold: 10,
+        lastUpdated: DateTime.now(),
+      );
+
+      state.addInventoryItem(mouse);
+      state.addInventoryItem(keyboard);
+      state.addInventoryItem(groceryItem);
+
+      // Rename category 'Electronics' -> 'Consumer Tech'
+      final renameSuccess = state.editCategory('Electronics', 'Consumer Tech');
+      expect(renameSuccess, isTrue);
+
+      // Verify category list updated
+      expect(state.allProductCategories.contains('Consumer Tech'), isTrue);
+      expect(state.allProductCategories.contains('Electronics'), isFalse);
+
+      // Verify associated inventory items automatically updated their category!
+      final updatedMouse = state.inventoryList.firstWhere((i) => i.id == 'item_mouse');
+      final updatedKeyboard = state.inventoryList.firstWhere((i) => i.id == 'item_kb');
+      final unchangedApple = state.inventoryList.firstWhere((i) => i.id == 'item_apple');
+
+      expect(updatedMouse.category, 'Consumer Tech');
+      expect(updatedKeyboard.category, 'Consumer Tech');
+      expect(unchangedApple.category, 'Groceries');
+
+      // Non-permitted staff cannot edit categories
+      final readOnlyStaff = StaffMember(
+        id: 'stf_ro',
+        name: 'Viewer',
+        email: 'viewer@shop.io',
+        permission: StaffPermission.readOnly,
+        joinedDate: DateTime.now(),
+      );
+      state.loginAsStaff(readOnlyStaff, shopId: 'SHOP-EDIT', shopName: 'Edit Shop');
+      final unauthorizedEdit = state.editCategory('Consumer Tech', 'Hacked Tech');
+      expect(unauthorizedEdit, isFalse);
+    });
+
+    test('Deleting a category frees up a slot and reassigns inventory items', () {
+      final state = AppStateProvider(initialAuth: true);
+      state.loginAsOwner('owner@shop.io', shopId: 'SHOP-DEL', shopName: 'Del Shop');
+
+      state.addCategory('Books');
+      state.addCategory('Toys');
+      expect(state.allProductCategories.length, 5);
+      expect(state.isCategoryLimitReached, isTrue);
+
+      // Delete 'Toys'
+      final delSuccess = state.deleteCategory('Toys');
+      expect(delSuccess, isTrue);
+      expect(state.allProductCategories.length, 4);
+      expect(state.isCategoryLimitReached, isFalse);
+      expect(state.remainingCategorySlots, 1);
+
+      // Slot is now freed: adding 'Footwear' succeeds!
+      final addSuccess = state.addCategory('Footwear');
+      expect(addSuccess, isTrue);
+      expect(state.allProductCategories.length, 5);
+      expect(state.allProductCategories.contains('Footwear'), isTrue);
+    });
   });
 }
 

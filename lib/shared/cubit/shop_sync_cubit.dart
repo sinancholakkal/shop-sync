@@ -21,12 +21,11 @@ class ShopSyncState {
   final List<ShopTransaction> transactionList;
   final List<String> customCategories;
 
+  static const int maxCategoryLimit = 5;
   static const List<String> defaultProductCategories = [
     'Electronics',
     'Accessories',
-    'Apparel',
     'Groceries',
-    'Office Supplies',
   ];
 
   const ShopSyncState({
@@ -39,7 +38,7 @@ class ShopSyncState {
     this.staffList = const [],
     this.inventoryList = const [],
     this.transactionList = const [],
-    this.customCategories = const [],
+    this.customCategories = const ['Electronics', 'Accessories', 'Groceries'],
   });
 
   bool get isOwner => currentUserRole == UserRole.owner;
@@ -52,25 +51,22 @@ class ShopSyncState {
   /// Permission check for category management
   bool get canManageCategories => isOwner || effectivePermission.canModifyItems;
 
-  /// Aggregated list of all product categories
+  int get maxCategories => maxCategoryLimit;
+  bool get isCategoryLimitReached => allProductCategories.length >= maxCategoryLimit;
+  int get remainingCategorySlots => (maxCategoryLimit - allProductCategories.length).clamp(0, maxCategoryLimit);
+
+  /// Aggregated list of all product categories (max 5)
   List<String> get allProductCategories {
-    final Map<String, String> categoryMap = {};
-    for (final cat in defaultProductCategories) {
-      categoryMap[cat.toLowerCase()] = cat;
-    }
-    for (final cat in customCategories) {
-      final trimmed = cat.trim();
-      if (trimmed.isNotEmpty) {
-        categoryMap[trimmed.toLowerCase()] = trimmed;
-      }
-    }
+    final list = List<String>.from(customCategories);
     for (final item in inventoryList) {
       final trimmed = item.category.trim();
-      if (trimmed.isNotEmpty) {
-        categoryMap[trimmed.toLowerCase()] = trimmed;
+      if (trimmed.isNotEmpty &&
+          list.length < maxCategoryLimit &&
+          !list.any((c) => c.toLowerCase() == trimmed.toLowerCase())) {
+        list.add(trimmed);
       }
     }
-    return categoryMap.values.toList();
+    return list;
   }
 
   double get totalRevenue =>
@@ -222,11 +218,88 @@ class ShopSyncCubit extends Cubit<ShopSyncState> {
     if (trimmed.isEmpty) return false;
 
     final exists = state.allProductCategories.any((c) => c.toLowerCase() == trimmed.toLowerCase());
-    if (!exists) {
-      final updated = List<String>.from(state.customCategories)..add(trimmed);
-      emit(state.copyWith(customCategories: updated));
-      FirestoreService.instance.addCategory(state.shopId, trimmed);
+    if (exists) return true;
+
+    if (state.allProductCategories.length >= ShopSyncState.maxCategoryLimit) {
+      debugPrint('ShopSyncCubit: Maximum category limit (${ShopSyncState.maxCategoryLimit}) reached');
+      return false;
     }
+
+    final updated = List<String>.from(state.customCategories)..add(trimmed);
+    emit(state.copyWith(customCategories: updated));
+    FirestoreService.instance.addCategory(state.shopId, trimmed);
+    return true;
+  }
+
+  bool editCategory(String oldName, String newName) {
+    if (!state.canManageCategories) {
+      debugPrint('ShopSyncCubit: Unauthorized category edit attempt');
+      return false;
+    }
+    final trimmedOld = oldName.trim();
+    final trimmedNew = newName.trim();
+    if (trimmedOld.isEmpty || trimmedNew.isEmpty) return false;
+    if (trimmedOld.toLowerCase() == trimmedNew.toLowerCase()) return true;
+
+    final conflict = state.allProductCategories.any(
+      (c) => c.toLowerCase() == trimmedNew.toLowerCase() && c.toLowerCase() != trimmedOld.toLowerCase(),
+    );
+    if (conflict) return false;
+
+    final updatedCats = List<String>.from(state.customCategories);
+    final idx = updatedCats.indexWhere((c) => c.toLowerCase() == trimmedOld.toLowerCase());
+    if (idx != -1) {
+      updatedCats[idx] = trimmedNew;
+    } else {
+      updatedCats.add(trimmedNew);
+    }
+
+    // Cascade rename to inventory items
+    final updatedItems = state.inventoryList.map((item) {
+      if (item.category.trim().toLowerCase() == trimmedOld.toLowerCase()) {
+        final up = item.copyWith(category: trimmedNew, lastUpdated: DateTime.now());
+        FirestoreService.instance.updateInventoryItem(state.shopId, up);
+        return up;
+      }
+      return item;
+    }).toList();
+
+    emit(state.copyWith(
+      customCategories: updatedCats,
+      inventoryList: updatedItems,
+    ));
+
+    FirestoreService.instance.renameCategory(state.shopId, trimmedOld, trimmedNew);
+    return true;
+  }
+
+  bool deleteCategory(String categoryName) {
+    if (!state.canManageCategories) return false;
+    if (state.allProductCategories.length <= 1) return false;
+
+    final trimmed = categoryName.trim();
+    final updatedCats = List<String>.from(state.customCategories);
+    final idx = updatedCats.indexWhere((c) => c.toLowerCase() == trimmed.toLowerCase());
+    if (idx == -1) return false;
+
+    updatedCats.removeAt(idx);
+    final fallback = updatedCats.first;
+
+    final updatedItems = state.inventoryList.map((item) {
+      if (item.category.trim().toLowerCase() == trimmed.toLowerCase()) {
+        final up = item.copyWith(category: fallback, lastUpdated: DateTime.now());
+        FirestoreService.instance.updateInventoryItem(state.shopId, up);
+        return up;
+      }
+      return item;
+    }).toList();
+
+    emit(state.copyWith(
+      customCategories: updatedCats,
+      inventoryList: updatedItems,
+    ));
+
+    FirestoreService.instance.deleteCategory(state.shopId, trimmed);
     return true;
   }
 
@@ -280,7 +353,7 @@ class ShopSyncCubit extends Cubit<ShopSyncState> {
       staffList: const [],
       inventoryList: const [],
       transactionList: const [],
-      customCategories: const [],
+      customCategories: const ['Electronics', 'Accessories', 'Groceries'],
     ));
   }
 

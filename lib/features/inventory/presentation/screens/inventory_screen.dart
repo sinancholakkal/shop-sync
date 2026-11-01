@@ -7,6 +7,7 @@ import 'package:shop_sync_app/core/widgets/glass_container.dart';
 import 'package:shop_sync_app/core/widgets/responsive_layout.dart';
 import 'package:shop_sync_app/features/inventory/domain/models/inventory_item.dart';
 import 'package:shop_sync_app/features/inventory/presentation/widgets/add_edit_item_dialog.dart';
+import 'package:shop_sync_app/features/inventory/presentation/widgets/category_manager_modal.dart';
 import 'package:shop_sync_app/shared/providers/app_state_provider.dart';
 
 class InventoryScreen extends StatefulWidget {
@@ -40,6 +41,23 @@ class _InventoryScreenState extends State<InventoryScreen> {
           behavior: SnackBarBehavior.floating,
         ),
       );
+      return;
+    }
+
+    if (appState.isCategoryLimitReached) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Maximum limit of ${appState.maxCategories} categories reached. You can edit existing categories.'),
+          backgroundColor: AppColors.accentAmber,
+          behavior: SnackBarBehavior.floating,
+          action: SnackBarAction(
+            label: 'Manage',
+            textColor: Colors.white,
+            onPressed: () => CategoryManagerModal.show(context),
+          ),
+        ),
+      );
+      CategoryManagerModal.show(context);
       return;
     }
 
@@ -471,33 +489,73 @@ class _InventoryScreenState extends State<InventoryScreen> {
                                   ),
                                 );
                               }),
-                              if (appState.canManageCategories)
+                              if (appState.canManageCategories) ...[
+                                if (!appState.isCategoryLimitReached)
+                                  Padding(
+                                    padding: const EdgeInsets.only(right: 8.0),
+                                    child: ActionChip(
+                                      avatar: const Icon(
+                                        Icons.add_circle_outline_rounded,
+                                        size: 16,
+                                        color: AppColors.primaryLight,
+                                      ),
+                                      label: Text(
+                                        'Add Category',
+                                        style: GoogleFonts.outfit(
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w600,
+                                          color: AppColors.primaryLight,
+                                        ),
+                                      ),
+                                      backgroundColor: AppColors.primary.withValues(alpha: 0.12),
+                                      side: BorderSide(
+                                        color: AppColors.primaryLight.withValues(alpha: 0.35),
+                                      ),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                      onPressed: () => _showAddCategoryDialog(context, appState),
+                                    ),
+                                  ),
                                 Padding(
                                   padding: const EdgeInsets.only(right: 8.0),
                                   child: ActionChip(
-                                    avatar: const Icon(
-                                      Icons.add_circle_outline_rounded,
+                                    avatar: Icon(
+                                      appState.isCategoryLimitReached
+                                          ? Icons.tune_rounded
+                                          : Icons.edit_note_rounded,
                                       size: 16,
-                                      color: AppColors.primaryLight,
+                                      color: appState.isCategoryLimitReached
+                                          ? AppColors.accentAmber
+                                          : AppColors.accentEmerald,
                                     ),
                                     label: Text(
-                                      'Add Category',
+                                      'Manage (${appState.allProductCategories.length}/${appState.maxCategories})',
                                       style: GoogleFonts.outfit(
                                         fontSize: 13,
                                         fontWeight: FontWeight.w600,
-                                        color: AppColors.primaryLight,
+                                        color: appState.isCategoryLimitReached
+                                            ? AppColors.accentAmber
+                                            : AppColors.accentEmerald,
                                       ),
                                     ),
-                                    backgroundColor: AppColors.primary.withValues(alpha: 0.12),
+                                    backgroundColor: (appState.isCategoryLimitReached
+                                            ? AppColors.accentAmber
+                                            : AppColors.accentEmerald)
+                                        .withValues(alpha: 0.12),
                                     side: BorderSide(
-                                      color: AppColors.primaryLight.withValues(alpha: 0.35),
+                                      color: (appState.isCategoryLimitReached
+                                              ? AppColors.accentAmber
+                                              : AppColors.accentEmerald)
+                                          .withValues(alpha: 0.35),
                                     ),
                                     shape: RoundedRectangleBorder(
                                       borderRadius: BorderRadius.circular(12),
                                     ),
-                                    onPressed: () => _showAddCategoryDialog(context, appState),
+                                    onPressed: () => CategoryManagerModal.show(context),
                                   ),
                                 ),
+                              ],
                             ],
                           ),
                         );

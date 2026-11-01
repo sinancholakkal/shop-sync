@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:shop_sync_app/core/theme/app_theme.dart';
 import 'package:shop_sync_app/core/widgets/glass_container.dart';
 import 'package:shop_sync_app/features/inventory/domain/models/inventory_item.dart';
+import 'package:shop_sync_app/features/inventory/presentation/widgets/category_manager_modal.dart';
 import 'package:shop_sync_app/shared/providers/app_state_provider.dart';
 
 class AddEditItemDialog extends StatefulWidget {
@@ -118,6 +119,18 @@ class _AddEditItemDialogState extends State<AddEditItemDialog> {
           behavior: SnackBarBehavior.floating,
         ),
       );
+      return;
+    }
+
+    if (appState != null && appState.isCategoryLimitReached) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Maximum limit of ${appState.maxCategories} categories reached. Please edit an existing category.'),
+          backgroundColor: AppColors.accentAmber,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      CategoryManagerModal.show(context);
       return;
     }
 
@@ -392,16 +405,30 @@ class _AddEditItemDialogState extends State<AddEditItemDialog> {
                                 color: Colors.transparent,
                                 child: InkWell(
                                   borderRadius: BorderRadius.circular(6),
-                                  onTap: () => _showAddCategoryDialog(context, appState),
+                                  onTap: () {
+                                    if (appState?.isCategoryLimitReached ?? false) {
+                                      CategoryManagerModal.show(context);
+                                    } else {
+                                      _showAddCategoryDialog(context, appState);
+                                    }
+                                  },
                                   child: Padding(
                                     padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
                                     child: Row(
                                       mainAxisSize: MainAxisSize.min,
                                       children: [
-                                        const Icon(Icons.add_circle_outline_rounded, size: 14, color: AppColors.primaryLight),
+                                        Icon(
+                                          (appState?.isCategoryLimitReached ?? false)
+                                              ? Icons.tune_rounded
+                                              : Icons.add_circle_outline_rounded,
+                                          size: 14,
+                                          color: AppColors.primaryLight,
+                                        ),
                                         const SizedBox(width: 4),
                                         Text(
-                                          '+ Add',
+                                          (appState?.isCategoryLimitReached ?? false)
+                                              ? 'Manage (5/5)'
+                                              : '+ Add',
                                           style: GoogleFonts.outfit(
                                             fontSize: 12,
                                             fontWeight: FontWeight.w600,
@@ -432,28 +459,49 @@ class _AddEditItemDialogState extends State<AddEditItemDialog> {
                                 ),
                               );
                             }),
-                            if (canManageCategories)
+                            if (canManageCategories) ...[
+                              if (appState == null || !appState.isCategoryLimitReached)
+                                DropdownMenuItem(
+                                  value: '__ADD_NEW__',
+                                  child: Row(
+                                    children: [
+                                      const Icon(Icons.add_rounded, size: 16, color: AppColors.primaryLight),
+                                      const SizedBox(width: 6),
+                                      Text(
+                                        '+ Add New Category...',
+                                        style: GoogleFonts.outfit(
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w600,
+                                          color: AppColors.primaryLight,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
                               DropdownMenuItem(
-                                value: '__ADD_NEW__',
+                                value: '__MANAGE_CATEGORIES__',
                                 child: Row(
                                   children: [
-                                    const Icon(Icons.add_rounded, size: 16, color: AppColors.primaryLight),
+                                    const Icon(Icons.edit_note_rounded, size: 16, color: AppColors.accentEmerald),
                                     const SizedBox(width: 6),
                                     Text(
-                                      '+ Add New Category...',
+                                      'Manage / Edit Categories...',
                                       style: GoogleFonts.outfit(
                                         fontSize: 14,
                                         fontWeight: FontWeight.w600,
-                                        color: AppColors.primaryLight,
+                                        color: AppColors.accentEmerald,
                                       ),
                                     ),
                                   ],
                                 ),
                               ),
+                            ],
                           ],
                           onChanged: (val) {
                             if (val == '__ADD_NEW__') {
                               _showAddCategoryDialog(context, appState);
+                            } else if (val == '__MANAGE_CATEGORIES__') {
+                              CategoryManagerModal.show(context);
                             } else if (val != null) {
                               setState(() => _selectedCategory = val);
                             }
