@@ -1,21 +1,27 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
+import 'package:shop_sync_app/core/services/firestore_service.dart';
 import 'package:shop_sync_app/core/theme/app_theme.dart';
 import 'package:shop_sync_app/core/widgets/glass_container.dart';
+import 'package:shop_sync_app/features/auth/domain/models/user_role.dart';
 import 'package:shop_sync_app/features/dashboard/presentation/screens/app_shell.dart';
+import 'package:shop_sync_app/features/staff/domain/models/staff_model.dart';
 import 'package:shop_sync_app/shared/providers/app_state_provider.dart';
 
 class StaffPendingApprovalScreen extends StatefulWidget {
   final String staffId;
   final String staffName;
   final String shopName;
+  final String scannedShopId;
 
   const StaffPendingApprovalScreen({
     super.key,
     required this.staffId,
     required this.staffName,
     required this.shopName,
+    this.scannedShopId = 'SHOP-SYNC-8821',
   });
 
   @override
@@ -27,6 +33,8 @@ class _StaffPendingApprovalScreenState extends State<StaffPendingApprovalScreen>
   late AnimationController _pulseController;
   late Animation<double> _pulseAnimation;
   bool _isChecking = false;
+  bool _hasNavigated = false;
+  StreamSubscription<StaffMember?>? _staffDocSub;
 
   @override
   void initState() {
@@ -39,45 +47,122 @@ class _StaffPendingApprovalScreenState extends State<StaffPendingApprovalScreen>
     _pulseAnimation = Tween<double>(begin: 0.95, end: 1.05).animate(
       CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
     );
+
+    _listenToApprovalStream();
+  }
+
+  void _listenToApprovalStream() {
+    if (widget.scannedShopId.isEmpty || widget.staffId.isEmpty) return;
+    _staffDocSub = FirestoreService.instance
+        .streamStaffMember(widget.scannedShopId, widget.staffId)
+        .listen((staff) {
+      if (staff != null && staff.isApproved && !_hasNavigated) {
+        _handleApproved(staff);
+      }
+    });
   }
 
   @override
   void dispose() {
+    _staffDocSub?.cancel();
     _pulseController.dispose();
     super.dispose();
   }
 
-  void _checkStatus() {
+  void _handleApproved(StaffMember approvedStaff) {
+    if (_hasNavigated || !mounted) return;
+    _hasNavigated = true;
+
+    final appState = Provider.of<AppStateProvider>(context, listen: false);
+    appState.loginAsStaff(
+      approvedStaff,
+      shopId: widget.scannedShopId,
+      shopName: widget.shopName,
+    );
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        backgroundColor: AppColors.accentEmerald,
+        content: Row(
+          children: [
+            const Icon(Icons.check_circle_rounded, color: Colors.white),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                'Approval Granted! Accessing ${widget.shopName}...',
+                style: GoogleFonts.outfit(fontWeight: FontWeight.bold, color: Colors.white),
+              ),
+            ),
+          ],
+        ),
+        duration: const Duration(seconds: 3),
+      ),
+    );
+
+    Navigator.of(context).pushAndRemoveUntil(
+      PageRouteBuilder(
+        pageBuilder: (context, animation, secondaryAnimation) => const AppShell(),
+        transitionsBuilder: (context, animation, secondaryAnimation, child) =>
+            FadeTransition(opacity: animation, child: child),
+        transitionDuration: const Duration(milliseconds: 400),
+      ),
+      (route) => false,
+    );
+  }
+
+  Future<void> _checkStatus() async {
+    if (_isChecking || _hasNavigated) return;
     setState(() => _isChecking = true);
-    Future.delayed(const Duration(milliseconds: 600), () {
-      if (!mounted) return;
-      final appState = Provider.of<AppStateProvider>(context, listen: false);
 
-      final isApproved = appState.staffList.any(
-        (s) => (s.id == widget.staffId || s.name == widget.staffName) && s.isApproved,
-      );
+    try {
+      // 1. Direct Firestore fetch
+      final firestoreStaff = await FirestoreService.instance
+          .getStaffMember(widget.scannedShopId, widget.staffId);
 
-      setState(() => _isChecking = false);
+      if (firestoreStaff != null && firestoreStaff.isApproved) {
+        if (mounted) setState(() => _isChecking = false);
+        _handleApproved(firestoreStaff);
+        return;
+      }
 
-      if (isApproved) {
-        Navigator.of(context).pushAndRemoveUntil(
-          PageRouteBuilder(
-            pageBuilder: (context, animation, secondaryAnimation) => const AppShell(),
-            transitionsBuilder: (context, animation, secondaryAnimation, child) =>
-                FadeTransition(opacity: animation, child: child),
-            transitionDuration: const Duration(milliseconds: 400),
+      // 2. In-memory check in AppStateProvider
+      if (mounted) {
+        final appState = Provider.of<AppStateProvider>(context, listen: false);
+        final found = appState.staffList.firstWhere(
+          (s) => (s.id == widget.staffId || s.name == widget.staffName) && s.isApproved,
+          orElse: () => StaffMember(
+            id: '',
+            name: '',
+            email: '',
+            permission: StaffPermission.readOnly,
+            isActive: false,
+            isApproved: false,
+            joinedDate: DateTime.now(),
+            shopId: '',
           ),
-          (route) => false,
         );
-      } else {
+
+        if (found.id.isNotEmpty && found.isApproved) {
+          setState(() => _isChecking = false);
+          _handleApproved(found);
+          return;
+        }
+      }
+
+      if (mounted) {
+        setState(() => _isChecking = false);
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Still awaiting shop owner approval. Please ask owner to approve your access.'),
+            content: Text('Still awaiting shop owner approval. Please ask owner to review and approve your access.'),
             duration: Duration(seconds: 3),
           ),
         );
       }
-    });
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isChecking = false);
+      }
+    }
   }
 
   @override
@@ -85,24 +170,24 @@ class _StaffPendingApprovalScreenState extends State<StaffPendingApprovalScreen>
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final appState = Provider.of<AppStateProvider>(context);
 
-    // Auto-navigate if approved via live stream
-    final isApproved = appState.staffList.any(
+    // Auto-navigate if approved via live stream or state
+    final approvedStaff = appState.staffList.firstWhere(
       (s) => (s.id == widget.staffId || s.name == widget.staffName) && s.isApproved,
+      orElse: () => StaffMember(
+        id: '',
+        name: '',
+        email: '',
+        permission: StaffPermission.readOnly,
+        isActive: false,
+        isApproved: false,
+        joinedDate: DateTime.now(),
+        shopId: '',
+      ),
     );
 
-    if (isApproved) {
+    if (approvedStaff.id.isNotEmpty && approvedStaff.isApproved && !_hasNavigated) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) {
-          Navigator.of(context).pushAndRemoveUntil(
-            PageRouteBuilder(
-              pageBuilder: (context, animation, secondaryAnimation) => const AppShell(),
-              transitionsBuilder: (context, animation, secondaryAnimation, child) =>
-                  FadeTransition(opacity: animation, child: child),
-              transitionDuration: const Duration(milliseconds: 400),
-            ),
-            (route) => false,
-          );
-        }
+        _handleApproved(approvedStaff);
       });
     }
 

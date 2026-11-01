@@ -53,23 +53,29 @@ class _StaffDetailsInputScreenState extends State<StaffDetailsInputScreen> {
         final newStaff = appState.addStaffMemberFromQR(
           name: _nameController.text.trim(),
           email: _emailController.text.trim(),
+          shopId: widget.scannedShopId,
+          shopName: widget.shopName,
         );
         try {
           context.read<ShopSyncCubit?>()?.addStaffMemberFromQR(
             name: _nameController.text.trim(),
             email: _emailController.text.trim(),
+            shopId: widget.scannedShopId,
+            shopName: widget.shopName,
           );
         } catch (_) {}
 
-        // Navigate to the Pending Approval screen
-        Navigator.of(context).pushReplacement(
+        // Navigate to the Pending Approval screen and pop prior scanner screens
+        Navigator.of(context).pushAndRemoveUntil(
           MaterialPageRoute(
             builder: (_) => StaffPendingApprovalScreen(
               staffId: newStaff.id,
               staffName: newStaff.name,
+              scannedShopId: widget.scannedShopId,
               shopName: widget.shopName,
             ),
           ),
+          (route) => route.isFirst,
         );
       }
     });

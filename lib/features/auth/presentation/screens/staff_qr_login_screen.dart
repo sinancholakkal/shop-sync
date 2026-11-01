@@ -97,6 +97,12 @@ class _StaffQrLoginScreenState extends State<StaffQrLoginScreen>
   }
 
   Future<void> _processScannedCode(String rawCode) async {
+    try {
+      await _scannerController?.stop();
+    } catch (_) {}
+
+    if (!mounted) return;
+
     final shopId = _extractShopId(rawCode);
     final appState = Provider.of<AppStateProvider>(context, listen: false);
     String resolvedName = 'Partner Retail Store';
@@ -131,7 +137,7 @@ class _StaffQrLoginScreenState extends State<StaffQrLoginScreen>
       ),
     );
 
-    Navigator.push(
+    await Navigator.push(
       context,
       MaterialPageRoute(
         builder: (_) => StaffDetailsInputScreen(
@@ -139,19 +145,29 @@ class _StaffQrLoginScreenState extends State<StaffQrLoginScreen>
           shopName: resolvedName,
         ),
       ),
-    ).then((_) {
-      if (mounted) {
-        setState(() {
-          _hasScanned = false;
-          _isProcessing = false;
-        });
-      }
-    });
+    );
+
+    if (mounted) {
+      setState(() {
+        _hasScanned = false;
+        _isProcessing = false;
+      });
+      try {
+        await _scannerController?.start();
+      } catch (_) {}
+    }
   }
 
-  void _proceedWithScannedData() {
+  void _proceedWithScannedData() async {
+    try {
+      await _scannerController?.stop();
+    } catch (_) {}
+
+    if (!mounted) return;
+
     final appState = Provider.of<AppStateProvider>(context, listen: false);
-    Navigator.push(
+
+    await Navigator.push(
       context,
       MaterialPageRoute(
         builder: (_) => StaffDetailsInputScreen(
@@ -160,18 +176,28 @@ class _StaffQrLoginScreenState extends State<StaffQrLoginScreen>
         ),
       ),
     );
+
+    if (mounted) {
+      setState(() {
+        _hasScanned = false;
+        _isProcessing = false;
+      });
+      try {
+        await _scannerController?.start();
+      } catch (_) {}
+    }
   }
 
-  void _openManualShopIdDialog() {
+  void _openManualShopIdDialog() async {
     final controller = TextEditingController();
-    showDialog(
+    final result = await showDialog<Map<String, String>>(
       context: context,
       builder: (ctx) {
         final isDark = Theme.of(ctx).brightness == Brightness.dark;
         bool isChecking = false;
 
         return StatefulBuilder(
-          builder: (context, setDialogState) {
+          builder: (dialogCtx, setDialogState) {
             return AlertDialog(
               backgroundColor: isDark ? const Color(0xFF1E293B) : Colors.white,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
@@ -227,17 +253,8 @@ class _StaffQrLoginScreenState extends State<StaffQrLoginScreen>
                             }
                           } catch (_) {}
 
-                          if (ctx.mounted && mounted) {
-                            Navigator.pop(ctx);
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => StaffDetailsInputScreen(
-                                  scannedShopId: code,
-                                  shopName: resolvedName,
-                                ),
-                              ),
-                            );
+                          if (ctx.mounted) {
+                            Navigator.pop(ctx, {'shopId': code, 'shopName': resolvedName});
                           }
                         },
                   child: isChecking
@@ -257,6 +274,31 @@ class _StaffQrLoginScreenState extends State<StaffQrLoginScreen>
         );
       },
     );
+
+    if (result != null && mounted) {
+      try {
+        await _scannerController?.stop();
+      } catch (_) {}
+      if (!mounted) return;
+      await Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => StaffDetailsInputScreen(
+            scannedShopId: result['shopId']!,
+            shopName: result['shopName']!,
+          ),
+        ),
+      );
+      if (mounted) {
+        setState(() {
+          _hasScanned = false;
+          _isProcessing = false;
+        });
+        try {
+          await _scannerController?.start();
+        } catch (_) {}
+      }
+    }
   }
 
   @override

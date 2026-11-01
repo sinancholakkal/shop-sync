@@ -293,9 +293,16 @@ class AppStateProvider extends ChangeNotifier {
   StaffMember addStaffMemberFromQR({
     required String name,
     required String email,
+    String? shopId,
+    String? shopName,
     StaffPermission permission = StaffPermission.stockCounting,
     bool isApproved = false,
   }) {
+    final effectiveShopId = (shopId != null && shopId.isNotEmpty) ? shopId : _shopId;
+    final effectiveShopName = (shopName != null && shopName.isNotEmpty) ? shopName : _shopName;
+    _shopId = effectiveShopId;
+    _shopName = effectiveShopName;
+
     final newStaff = StaffMember(
       id: 'stf_${DateTime.now().millisecondsSinceEpoch}',
       name: name,
@@ -304,14 +311,15 @@ class AppStateProvider extends ChangeNotifier {
       isActive: true,
       isApproved: isApproved,
       joinedDate: DateTime.now(),
-      shopId: _shopId,
+      shopId: effectiveShopId,
     );
     _staffList.insert(0, newStaff);
     _currentStaff = newStaff;
     _currentUserRole = UserRole.staff;
     _isAuthenticated = true;
 
-    FirestoreService.instance.addStaffMember(_shopId, newStaff);
+    _bindFirestoreStreams(effectiveShopId);
+    FirestoreService.instance.addStaffMember(effectiveShopId, newStaff);
     notifyListeners();
     return newStaff;
   }

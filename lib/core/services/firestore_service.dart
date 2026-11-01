@@ -261,6 +261,46 @@ class FirestoreService {
     }
   }
 
+  Stream<StaffMember?> streamStaffMember(String shopId, String staffId) {
+    try {
+      final firestore = _firestore;
+      if (firestore == null) return const Stream.empty();
+
+      return firestore
+          .collection('shops')
+          .doc(shopId)
+          .collection('staff')
+          .doc(staffId)
+          .snapshots()
+          .map((doc) {
+        if (!doc.exists || doc.data() == null) return null;
+        return StaffMember.fromMap(doc.data()!, doc.id);
+      });
+    } catch (e) {
+      debugPrint('FirestoreService: streamStaffMember notice: $e');
+      return const Stream.empty();
+    }
+  }
+
+  Future<StaffMember?> getStaffMember(String shopId, String staffId) async {
+    try {
+      final firestore = _firestore;
+      if (firestore == null) return null;
+
+      final doc = await firestore
+          .collection('shops')
+          .doc(shopId)
+          .collection('staff')
+          .doc(staffId)
+          .get();
+      if (!doc.exists || doc.data() == null) return null;
+      return StaffMember.fromMap(doc.data()!, doc.id);
+    } catch (e) {
+      debugPrint('FirestoreService: getStaffMember notice: $e');
+      return null;
+    }
+  }
+
   Future<void> addStaffMember(String shopId, StaffMember staff) async {
     try {
       final firestore = _firestore;

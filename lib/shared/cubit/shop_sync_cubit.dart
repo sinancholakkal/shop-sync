@@ -301,9 +301,13 @@ class ShopSyncCubit extends Cubit<ShopSyncState> {
   StaffMember addStaffMemberFromQR({
     required String name,
     required String email,
+    String? shopId,
+    String? shopName,
     StaffPermission permission = StaffPermission.stockCounting,
     bool isApproved = false,
   }) {
+    final effectiveShopId = (shopId != null && shopId.isNotEmpty) ? shopId : state.shopId;
+    final effectiveShopName = (shopName != null && shopName.isNotEmpty) ? shopName : state.shopName;
     final newStaff = StaffMember(
       id: 'stf_${DateTime.now().millisecondsSinceEpoch}',
       name: name,
@@ -312,13 +316,16 @@ class ShopSyncCubit extends Cubit<ShopSyncState> {
       isActive: true,
       isApproved: isApproved,
       joinedDate: DateTime.now(),
-      shopId: state.shopId,
+      shopId: effectiveShopId,
     );
     final updatedList = [newStaff, ...state.staffList];
 
-    FirestoreService.instance.addStaffMember(state.shopId, newStaff);
+    _bindFirestoreStreams(effectiveShopId);
+    FirestoreService.instance.addStaffMember(effectiveShopId, newStaff);
 
     emit(state.copyWith(
+      shopId: effectiveShopId,
+      shopName: effectiveShopName,
       staffList: updatedList,
       currentStaff: newStaff,
       currentUserRole: UserRole.staff,
