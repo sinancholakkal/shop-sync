@@ -38,6 +38,7 @@ class ProductDetailScreen extends StatelessWidget {
     final permission = appState.effectivePermission;
     final canModify = isOwner || permission.canModifyItems;
     final canCount = isOwner || permission.canUpdateStockCount;
+    final canViewCost = appState.canViewCostPrice;
 
     // Find the item reactively
     final item = appState.inventoryList.cast<InventoryItem?>().firstWhere(
@@ -275,20 +276,31 @@ class ProductDetailScreen extends StatelessWidget {
                       subtext: 'Price updated: ${_formatRelativeTime(item.priceLastUpdated)}',
                     );
 
+                    final wholesaleCard = _buildMetricTile(
+                      isDark: isDark,
+                      icon: Icons.storefront_rounded,
+                      iconColor: AppColors.accentIndigo,
+                      label: 'Wholesale Price',
+                      value: currencyFmt.format(item.wholesalePrice),
+                      subtext: canViewCost
+                          ? '+${item.effectiveWholesaleMarginPercent.toStringAsFixed(1)}% margin • +${currencyFmt.format(item.wholesaleProfitPerUnit)} profit'
+                          : 'B2B / bulk order rate',
+                    );
+
                     final costCard = _buildMetricTile(
                       isDark: isDark,
                       icon: Icons.price_change_outlined,
                       iconColor: AppColors.accentAmber,
                       label: 'Cost (Acquisition) Price',
                       value: currencyFmt.format(item.costPrice),
-                      subtext: 'Wholesale / purchase cost',
+                      subtext: 'Confidential purchase cost',
                     );
 
                     final marginCard = _buildMetricTile(
                       isDark: isDark,
                       icon: Icons.trending_up_rounded,
                       iconColor: AppColors.accentEmerald,
-                      label: 'Profit Margin',
+                      label: 'Retail Profit Margin',
                       value: '+${item.effectiveMarginPercent.toStringAsFixed(1)}%',
                       subtext: '+${currencyFmt.format(item.profitPerUnit)} profit / item',
                       valueColor: AppColors.accentEmerald,
@@ -300,7 +312,9 @@ class ProductDetailScreen extends StatelessWidget {
                       iconColor: AppColors.accentPurple,
                       label: 'Total Inventory Value',
                       value: currencyFmt.format(item.totalStockValue),
-                      subtext: 'Cost value: ${currencyFmt.format(item.totalStockCost)}',
+                      subtext: canViewCost
+                          ? 'Cost value: ${currencyFmt.format(item.totalStockCost)}'
+                          : '${item.quantity} units currently in stock',
                     );
 
                     if (isSmall) {
@@ -308,10 +322,30 @@ class ProductDetailScreen extends StatelessWidget {
                         children: [
                           retailCard,
                           const SizedBox(height: 12),
-                          costCard,
+                          wholesaleCard,
+                          if (canViewCost) ...[
+                            const SizedBox(height: 12),
+                            costCard,
+                            const SizedBox(height: 12),
+                            marginCard,
+                          ],
                           const SizedBox(height: 12),
-                          marginCard,
-                          const SizedBox(height: 12),
+                          stockValCard,
+                        ],
+                      );
+                    }
+
+                    if (!canViewCost) {
+                      return Column(
+                        children: [
+                          Row(
+                            children: [
+                              Expanded(child: retailCard),
+                              const SizedBox(width: 14),
+                              Expanded(child: wholesaleCard),
+                            ],
+                          ),
+                          const SizedBox(height: 14),
                           stockValCard,
                         ],
                       );
@@ -323,17 +357,19 @@ class ProductDetailScreen extends StatelessWidget {
                           children: [
                             Expanded(child: retailCard),
                             const SizedBox(width: 14),
-                            Expanded(child: costCard),
+                            Expanded(child: wholesaleCard),
                           ],
                         ),
                         const SizedBox(height: 14),
                         Row(
                           children: [
-                            Expanded(child: marginCard),
+                            Expanded(child: costCard),
                             const SizedBox(width: 14),
-                            Expanded(child: stockValCard),
+                            Expanded(child: marginCard),
                           ],
                         ),
+                        const SizedBox(height: 14),
+                        stockValCard,
                       ],
                     );
                   },
@@ -345,6 +381,8 @@ class ProductDetailScreen extends StatelessWidget {
                   history: item.priceHistory,
                   currentPrice: item.price,
                   currentCost: item.costPrice,
+                  currentWholesalePrice: item.wholesalePrice,
+                  canViewCost: canViewCost,
                 ),
                 const SizedBox(height: 16),
 
@@ -449,7 +487,9 @@ class ProductDetailScreen extends StatelessWidget {
                                             ),
                                           ),
                                           Text(
-                                            'Cost: ${currencyFmt.format(entry.costPrice)} (+${entry.effectiveMargin.toStringAsFixed(1)}%)',
+                                            canViewCost
+                                                ? 'WS: ${currencyFmt.format(entry.effectiveWholesalePrice)} • Cost: ${currencyFmt.format(entry.costPrice)} (+${entry.effectiveMargin.toStringAsFixed(1)}%)'
+                                                : 'Wholesale: ${currencyFmt.format(entry.effectiveWholesalePrice)}',
                                             style: GoogleFonts.outfit(
                                               fontSize: 11,
                                               color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,

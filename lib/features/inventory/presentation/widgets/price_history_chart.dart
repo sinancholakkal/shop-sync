@@ -10,12 +10,16 @@ class PriceHistoryChart extends StatefulWidget {
   final List<PriceHistoryEntry> history;
   final double currentPrice;
   final double currentCost;
+  final double? currentWholesalePrice;
+  final bool canViewCost;
 
   const PriceHistoryChart({
     super.key,
     required this.history,
     required this.currentPrice,
     required this.currentCost,
+    this.currentWholesalePrice,
+    this.canViewCost = true,
   });
 
   @override
@@ -32,6 +36,7 @@ class _PriceHistoryChartState extends State<PriceHistoryChart> {
         PriceHistoryEntry(
           timestamp: DateTime.now(),
           price: widget.currentPrice,
+          wholesalePrice: widget.currentWholesalePrice ?? widget.currentPrice,
           costPrice: widget.currentCost,
           note: 'Current Price',
         ),
@@ -199,20 +204,22 @@ class _PriceHistoryChartState extends State<PriceHistoryChart> {
                     'Retail',
                     style: GoogleFonts.outfit(fontSize: 11, color: isDark ? Colors.white70 : Colors.black54),
                   ),
-                  const SizedBox(width: 10),
-                  Container(
-                    width: 8,
-                    height: 8,
-                    decoration: const BoxDecoration(
-                      color: AppColors.accentAmber,
-                      shape: BoxShape.circle,
+                  if (widget.canViewCost) ...[
+                    const SizedBox(width: 10),
+                    Container(
+                      width: 8,
+                      height: 8,
+                      decoration: const BoxDecoration(
+                        color: AppColors.accentAmber,
+                        shape: BoxShape.circle,
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 4),
-                  Text(
-                    'Cost',
-                    style: GoogleFonts.outfit(fontSize: 11, color: isDark ? Colors.white70 : Colors.black54),
-                  ),
+                    const SizedBox(width: 4),
+                    Text(
+                      'Cost',
+                      style: GoogleFonts.outfit(fontSize: 11, color: isDark ? Colors.white70 : Colors.black54),
+                    ),
+                  ],
                 ],
               ),
             ],
@@ -281,38 +288,58 @@ class _PriceHistoryChartState extends State<PriceHistoryChart> {
                         ),
                       ],
                     ),
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          'Cost: ',
-                          style: GoogleFonts.outfit(fontSize: 11, color: isDark ? Colors.white54 : Colors.black54),
+                    if (widget.canViewCost) ...[
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            'Cost: ',
+                            style: GoogleFonts.outfit(fontSize: 11, color: isDark ? Colors.white54 : Colors.black54),
+                          ),
+                          Text(
+                            currencyFmt.format(activeEntry.costPrice),
+                            style: GoogleFonts.outfit(
+                              fontSize: 13,
+                              fontWeight: FontWeight.bold,
+                              color: AppColors.accentAmber,
+                            ),
+                          ),
+                        ],
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: AppColors.accentEmerald.withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(6),
                         ),
-                        Text(
-                          currencyFmt.format(activeEntry.costPrice),
+                        child: Text(
+                          '+${activeEntry.effectiveMargin.toStringAsFixed(1)}%',
                           style: GoogleFonts.outfit(
-                            fontSize: 13,
+                            fontSize: 10.5,
                             fontWeight: FontWeight.bold,
-                            color: AppColors.accentAmber,
+                            color: AppColors.accentEmerald,
                           ),
                         ),
-                      ],
-                    ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: AppColors.accentEmerald.withValues(alpha: 0.15),
-                        borderRadius: BorderRadius.circular(6),
                       ),
-                      child: Text(
-                        '+${activeEntry.effectiveMargin.toStringAsFixed(1)}%',
-                        style: GoogleFonts.outfit(
-                          fontSize: 10.5,
-                          fontWeight: FontWeight.bold,
-                          color: AppColors.accentEmerald,
-                        ),
+                    ] else ...[
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            'Wholesale: ',
+                            style: GoogleFonts.outfit(fontSize: 11, color: isDark ? Colors.white54 : Colors.black54),
+                          ),
+                          Text(
+                            currencyFmt.format(activeEntry.effectiveWholesalePrice),
+                            style: GoogleFonts.outfit(
+                              fontSize: 13,
+                              fontWeight: FontWeight.bold,
+                              color: AppColors.accentIndigo,
+                            ),
+                          ),
+                        ],
                       ),
-                    ),
+                    ],
                   ],
                 ),
               ],
@@ -337,6 +364,7 @@ class _PriceHistoryChartState extends State<PriceHistoryChart> {
                       isDark: isDark,
                       primaryColor: AppColors.primaryLight,
                       costColor: AppColors.accentAmber,
+                      canViewCost: widget.canViewCost,
                     ),
                   ),
                 );
@@ -427,6 +455,7 @@ class _PriceChartPainter extends CustomPainter {
   final bool isDark;
   final Color primaryColor;
   final Color costColor;
+  final bool canViewCost;
 
   _PriceChartPainter({
     required this.points,
@@ -434,6 +463,7 @@ class _PriceChartPainter extends CustomPainter {
     required this.isDark,
     required this.primaryColor,
     required this.costColor,
+    this.canViewCost = true,
   });
 
   @override
@@ -445,15 +475,17 @@ class _PriceChartPainter extends CustomPainter {
     final double graphWidth = size.width - (paddingX * 2);
     final double graphHeight = size.height - (paddingY * 2);
 
-    // Compute min and max across both price and cost
+    // Compute min and max across price (and cost if permitted)
     double minY = double.infinity;
     double maxY = -double.infinity;
 
     for (final p in points) {
       if (p.price < minY) minY = p.price;
       if (p.price > maxY) maxY = p.price;
-      if (p.costPrice < minY) minY = p.costPrice;
-      if (p.costPrice > maxY) maxY = p.costPrice;
+      if (canViewCost) {
+        if (p.costPrice < minY) minY = p.costPrice;
+        if (p.costPrice > maxY) maxY = p.costPrice;
+      }
     }
 
     if (minY == maxY) {
@@ -478,22 +510,24 @@ class _PriceChartPainter extends CustomPainter {
     // If single point, render flat dashed line with point
     if (points.length == 1) {
       final yPrice = paddingY + graphHeight * (1 - (points.first.price - minY) / (maxY - minY));
-      final yCost = paddingY + graphHeight * (1 - (points.first.costPrice - minY) / (maxY - minY));
 
       final dashPaint = Paint()
         ..color = primaryColor.withValues(alpha: 0.6)
         ..strokeWidth = 2.0;
       canvas.drawLine(Offset(paddingX, yPrice), Offset(size.width - paddingX, yPrice), dashPaint);
 
-      final costDashPaint = Paint()
-        ..color = costColor.withValues(alpha: 0.5)
-        ..strokeWidth = 1.5;
-      canvas.drawLine(Offset(paddingX, yCost), Offset(size.width - paddingX, yCost), costDashPaint);
-
       // Node circles
       final midX = size.width / 2;
       _drawGlowPoint(canvas, Offset(midX, yPrice), primaryColor, 6);
-      _drawGlowPoint(canvas, Offset(midX, yCost), costColor, 5);
+
+      if (canViewCost) {
+        final yCost = paddingY + graphHeight * (1 - (points.first.costPrice - minY) / (maxY - minY));
+        final costDashPaint = Paint()
+          ..color = costColor.withValues(alpha: 0.5)
+          ..strokeWidth = 1.5;
+        canvas.drawLine(Offset(paddingX, yCost), Offset(size.width - paddingX, yCost), costDashPaint);
+        _drawGlowPoint(canvas, Offset(midX, yCost), costColor, 5);
+      }
       return;
     }
 
@@ -509,18 +543,22 @@ class _PriceChartPainter extends CustomPainter {
       final yPrice = paddingY + (graphHeight * (1.0 - normPrice));
       priceOffsets.add(Offset(x, yPrice));
 
-      final normCost = ((points[i].costPrice - minY) / (maxY - minY)).clamp(0.0, 1.0);
-      final yCost = paddingY + (graphHeight * (1.0 - normCost));
-      costOffsets.add(Offset(x, yCost));
+      if (canViewCost) {
+        final normCost = ((points[i].costPrice - minY) / (maxY - minY)).clamp(0.0, 1.0);
+        final yCost = paddingY + (graphHeight * (1.0 - normCost));
+        costOffsets.add(Offset(x, yCost));
+      }
     }
 
-    // 1. Draw Cost Price Line (Secondary, amber)
-    final costPath = _buildSmoothPath(costOffsets);
-    final costLinePaint = Paint()
-      ..color = costColor.withValues(alpha: 0.65)
-      ..strokeWidth = 2.0
-      ..style = PaintingStyle.stroke;
-    canvas.drawPath(costPath, costLinePaint);
+    // 1. Draw Cost Price Line (Secondary, amber) if permitted
+    if (canViewCost) {
+      final costPath = _buildSmoothPath(costOffsets);
+      final costLinePaint = Paint()
+        ..color = costColor.withValues(alpha: 0.65)
+        ..strokeWidth = 2.0
+        ..style = PaintingStyle.stroke;
+      canvas.drawPath(costPath, costLinePaint);
+    }
 
     // 2. Draw Retail Price Area Gradient
     final pricePath = _buildSmoothPath(priceOffsets);
@@ -565,12 +603,14 @@ class _PriceChartPainter extends CustomPainter {
         primaryColor,
         isHovered ? 7.0 : 4.5,
       );
-      _drawGlowPoint(
-        canvas,
-        costOffsets[i],
-        costColor,
-        isHovered ? 5.5 : 3.5,
-      );
+      if (canViewCost) {
+        _drawGlowPoint(
+          canvas,
+          costOffsets[i],
+          costColor,
+          isHovered ? 5.5 : 3.5,
+        );
+      }
 
       // Vertical guide line for hovered index
       if (isHovered) {
@@ -635,6 +675,7 @@ class _PriceChartPainter extends CustomPainter {
   bool shouldRepaint(covariant _PriceChartPainter oldDelegate) {
     return oldDelegate.points != points ||
         oldDelegate.hoveredIndex != hoveredIndex ||
-        oldDelegate.isDark != isDark;
+        oldDelegate.isDark != isDark ||
+        oldDelegate.canViewCost != canViewCost;
   }
 }

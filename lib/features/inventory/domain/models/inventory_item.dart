@@ -1,43 +1,58 @@
 class PriceHistoryEntry {
   final DateTime timestamp;
   final double price;
+  final double? wholesalePrice;
   final double costPrice;
   final double? marginPercent;
+  final double? wholesaleMarginPercent;
   final String? note;
 
   PriceHistoryEntry({
     required this.timestamp,
     required this.price,
+    this.wholesalePrice,
     required this.costPrice,
     this.marginPercent,
+    this.wholesaleMarginPercent,
     this.note,
   });
 
+  double get effectiveWholesalePrice => wholesalePrice ?? price;
   double get profit => price - costPrice;
+  double get wholesaleProfit => effectiveWholesalePrice - costPrice;
 
   double get effectiveMargin =>
       marginPercent ?? (costPrice > 0 ? ((price - costPrice) / costPrice) * 100 : 0.0);
+
+  double get effectiveWholesaleMargin =>
+      wholesaleMarginPercent ??
+      (costPrice > 0 && wholesalePrice != null ? ((wholesalePrice! - costPrice) / costPrice) * 100 : 0.0);
 
   Map<String, dynamic> toMap() {
     return {
       'timestamp': timestamp.toIso8601String(),
       'price': price,
+      if (wholesalePrice != null) 'wholesalePrice': wholesalePrice,
       'costPrice': costPrice,
       'marginPercent': effectiveMargin,
+      if (wholesaleMarginPercent != null) 'wholesaleMarginPercent': effectiveWholesaleMargin,
       if (note != null) 'note': note,
     };
   }
 
   factory PriceHistoryEntry.fromMap(Map<String, dynamic> map) {
     final priceVal = (map['price'] as num?)?.toDouble() ?? 0.0;
+    final wholesaleVal = (map['wholesalePrice'] as num?)?.toDouble();
     final costVal = (map['costPrice'] as num?)?.toDouble() ?? 0.0;
     return PriceHistoryEntry(
       timestamp: map['timestamp'] != null
           ? DateTime.tryParse(map['timestamp'] as String) ?? DateTime.now()
           : DateTime.now(),
       price: priceVal,
+      wholesalePrice: wholesaleVal,
       costPrice: costVal,
       marginPercent: (map['marginPercent'] as num?)?.toDouble(),
+      wholesaleMarginPercent: (map['wholesaleMarginPercent'] as num?)?.toDouble(),
       note: map['note'] as String?,
     );
   }
@@ -49,8 +64,10 @@ class InventoryItem {
   final String sku;
   final String category;
   final double price;
+  final double wholesalePrice;
   final double costPrice;
   final double? marginPercent;
+  final double? wholesaleMarginPercent;
   final int quantity;
   final int minThreshold;
   final DateTime lastUpdated;
@@ -65,8 +82,10 @@ class InventoryItem {
     required this.sku,
     required this.category,
     required this.price,
+    double? wholesalePrice,
     required this.costPrice,
     this.marginPercent,
+    this.wholesaleMarginPercent,
     required this.quantity,
     required this.minThreshold,
     required this.lastUpdated,
@@ -74,7 +93,8 @@ class InventoryItem {
     DateTime? stockLastUpdated,
     DateTime? createdAt,
     List<PriceHistoryEntry>? priceHistory,
-  })  : priceLastUpdated = priceLastUpdated ?? lastUpdated,
+  })  : wholesalePrice = wholesalePrice ?? price,
+        priceLastUpdated = priceLastUpdated ?? lastUpdated,
         stockLastUpdated = stockLastUpdated ?? lastUpdated,
         createdAt = createdAt ?? lastUpdated,
         priceHistory = (priceHistory != null && priceHistory.isNotEmpty)
@@ -83,8 +103,10 @@ class InventoryItem {
                 PriceHistoryEntry(
                   timestamp: priceLastUpdated ?? lastUpdated,
                   price: price,
+                  wholesalePrice: wholesalePrice ?? price,
                   costPrice: costPrice,
                   marginPercent: marginPercent,
+                  wholesaleMarginPercent: wholesaleMarginPercent,
                   note: 'Initial Price',
                 ),
               ]);
@@ -98,8 +120,19 @@ class InventoryItem {
   }
 
   double get effectiveMarginPercent => marginPercent ?? calculatedMarginPercent;
+
+  double get calculatedWholesaleMarginPercent {
+    if (costPrice <= 0) return 0.0;
+    return ((wholesalePrice - costPrice) / costPrice) * 100.0;
+  }
+
+  double get effectiveWholesaleMarginPercent =>
+      wholesaleMarginPercent ?? calculatedWholesaleMarginPercent;
+
   double get profitPerUnit => price - costPrice;
+  double get wholesaleProfitPerUnit => wholesalePrice - costPrice;
   double get totalStockValue => price * quantity;
+  double get totalStockWholesaleValue => wholesalePrice * quantity;
   double get totalStockCost => costPrice * quantity;
 
   InventoryItem copyWith({
@@ -108,8 +141,10 @@ class InventoryItem {
     String? sku,
     String? category,
     double? price,
+    double? wholesalePrice,
     double? costPrice,
     double? marginPercent,
+    double? wholesaleMarginPercent,
     int? quantity,
     int? minThreshold,
     DateTime? lastUpdated,
@@ -120,8 +155,11 @@ class InventoryItem {
   }) {
     final now = DateTime.now();
     final newPrice = price ?? this.price;
+    final newWholesale = wholesalePrice ?? this.wholesalePrice;
     final newCost = costPrice ?? this.costPrice;
-    final priceChanged = (newPrice != this.price) || (newCost != this.costPrice);
+    final priceChanged = (newPrice != this.price) ||
+        (newWholesale != this.wholesalePrice) ||
+        (newCost != this.costPrice);
     final stockChanged = (quantity != null && quantity != this.quantity);
 
     List<PriceHistoryEntry> updatedHistory;
@@ -134,8 +172,11 @@ class InventoryItem {
           PriceHistoryEntry(
             timestamp: now,
             price: newPrice,
+            wholesalePrice: newWholesale,
             costPrice: newCost,
             marginPercent: marginPercent ?? this.marginPercent,
+            wholesaleMarginPercent:
+                wholesaleMarginPercent ?? this.wholesaleMarginPercent,
             note: 'Price updated',
           ),
         );
@@ -148,8 +189,11 @@ class InventoryItem {
       sku: sku ?? this.sku,
       category: category ?? this.category,
       price: newPrice,
+      wholesalePrice: newWholesale,
       costPrice: newCost,
       marginPercent: marginPercent ?? this.marginPercent,
+      wholesaleMarginPercent:
+          wholesaleMarginPercent ?? this.wholesaleMarginPercent,
       quantity: quantity ?? this.quantity,
       minThreshold: minThreshold ?? this.minThreshold,
       lastUpdated: lastUpdated ?? now,
@@ -166,8 +210,11 @@ class InventoryItem {
       'sku': sku,
       'category': category,
       'price': price,
+      'wholesalePrice': wholesalePrice,
       'costPrice': costPrice,
       'marginPercent': marginPercent ?? calculatedMarginPercent,
+      'wholesaleMarginPercent':
+          wholesaleMarginPercent ?? calculatedWholesaleMarginPercent,
       'quantity': quantity,
       'minThreshold': minThreshold,
       'lastUpdated': lastUpdated.toIso8601String(),
@@ -180,9 +227,12 @@ class InventoryItem {
 
   factory InventoryItem.fromMap(Map<String, dynamic> map, String docId) {
     final priceVal = (map['price'] as num?)?.toDouble() ?? 0.0;
+    final wholesaleVal = (map['wholesalePrice'] as num?)?.toDouble() ?? priceVal;
     final costVal = (map['costPrice'] as num?)?.toDouble() ?? 0.0;
     final marginVal = (map['marginPercent'] as num?)?.toDouble() ??
         (costVal > 0 ? ((priceVal - costVal) / costVal) * 100.0 : null);
+    final wholesaleMarginVal = (map['wholesaleMarginPercent'] as num?)?.toDouble() ??
+        (costVal > 0 ? ((wholesaleVal - costVal) / costVal) * 100.0 : null);
 
     final lastUpdatedVal = map['lastUpdated'] != null
         ? DateTime.tryParse(map['lastUpdated'] as String) ?? DateTime.now()
@@ -211,8 +261,10 @@ class InventoryItem {
           PriceHistoryEntry(
             timestamp: priceLastUpdatedVal,
             price: priceVal,
+            wholesalePrice: wholesaleVal,
             costPrice: costVal,
             marginPercent: marginVal,
+            wholesaleMarginPercent: wholesaleMarginVal,
             note: 'Initial Price',
           ),
         ];
@@ -222,8 +274,10 @@ class InventoryItem {
         PriceHistoryEntry(
           timestamp: priceLastUpdatedVal,
           price: priceVal,
+          wholesalePrice: wholesaleVal,
           costPrice: costVal,
           marginPercent: marginVal,
+          wholesaleMarginPercent: wholesaleMarginVal,
           note: 'Initial Price',
         ),
       ];
@@ -235,8 +289,10 @@ class InventoryItem {
       sku: map['sku'] as String? ?? 'SKU-000',
       category: map['category'] as String? ?? 'General',
       price: priceVal,
+      wholesalePrice: wholesaleVal,
       costPrice: costVal,
       marginPercent: marginVal,
+      wholesaleMarginPercent: wholesaleMarginVal,
       quantity: (map['quantity'] as num?)?.toInt() ?? 0,
       minThreshold: (map['minThreshold'] as num?)?.toInt() ?? 5,
       lastUpdated: lastUpdatedVal,

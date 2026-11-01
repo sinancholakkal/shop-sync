@@ -632,7 +632,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
                         crossAxisCount: context.isDesktop
                             ? 3
                             : (context.isTablet ? 2 : 1),
-                        mainAxisExtent: 235,
+                        mainAxisExtent: 245,
                         crossAxisSpacing: 16,
                         mainAxisSpacing: 16,
                       ),
@@ -883,7 +883,7 @@ class _InventoryCard extends StatelessWidget {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Text(
-                        'Price',
+                        'Retail',
                         style: GoogleFonts.outfit(
                           fontSize: 11,
                           color: isDark ? Colors.white54 : Colors.black45,
@@ -903,9 +903,18 @@ class _InventoryCard extends StatelessWidget {
                   Text(
                     currencyFmt.format(item.price),
                     style: GoogleFonts.outfit(
-                      fontSize: 18,
+                      fontSize: 17,
                       fontWeight: FontWeight.w700,
                       color: isDark ? Colors.white : Colors.black87,
+                    ),
+                  ),
+                  const SizedBox(height: 1),
+                  Text(
+                    'WS: ${currencyFmt.format(item.wholesalePrice)}',
+                    style: GoogleFonts.outfit(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.accentIndigo,
                     ),
                   ),
                 ],

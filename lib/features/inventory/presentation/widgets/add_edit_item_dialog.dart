@@ -40,6 +40,8 @@ class _AddEditItemDialogState extends State<AddEditItemDialog> {
   late TextEditingController _costPriceController;
   late TextEditingController _marginController;
   late TextEditingController _priceController;
+  late TextEditingController _wholesalePriceController;
+  late TextEditingController _wholesaleMarginController;
   late TextEditingController _quantityController;
   late TextEditingController _minThresholdController;
   String _selectedCategory = 'Electronics';
@@ -57,6 +59,9 @@ class _AddEditItemDialogState extends State<AddEditItemDialog> {
     _priceController = TextEditingController(
       text: item != null ? (item.price > 0 ? item.price.toStringAsFixed(2) : '') : '',
     );
+    _wholesalePriceController = TextEditingController(
+      text: item != null ? (item.wholesalePrice > 0 ? item.wholesalePrice.toStringAsFixed(2) : '') : '',
+    );
 
     double initialMargin = 20.0;
     if (item != null) {
@@ -68,6 +73,20 @@ class _AddEditItemDialogState extends State<AddEditItemDialog> {
     }
     _marginController = TextEditingController(
       text: initialMargin.toStringAsFixed(initialMargin.truncateToDouble() == initialMargin ? 0 : 1),
+    );
+
+    double initialWholesaleMargin = 15.0;
+    if (item != null) {
+      if (item.wholesaleMarginPercent != null) {
+        initialWholesaleMargin = item.wholesaleMarginPercent!;
+      } else if (item.costPrice > 0 && item.wholesalePrice > 0) {
+        initialWholesaleMargin = item.calculatedWholesaleMarginPercent;
+      }
+    }
+    _wholesaleMarginController = TextEditingController(
+      text: initialWholesaleMargin.toStringAsFixed(
+        initialWholesaleMargin.truncateToDouble() == initialWholesaleMargin ? 0 : 1,
+      ),
     );
 
     _quantityController = TextEditingController(text: item != null ? item.quantity.toString() : '10');
@@ -97,6 +116,8 @@ class _AddEditItemDialogState extends State<AddEditItemDialog> {
     _costPriceController.dispose();
     _marginController.dispose();
     _priceController.dispose();
+    _wholesalePriceController.dispose();
+    _wholesaleMarginController.dispose();
     _quantityController.dispose();
     _minThresholdController.dispose();
     super.dispose();
@@ -106,10 +127,17 @@ class _AddEditItemDialogState extends State<AddEditItemDialog> {
     if (_isCalculating) return;
     final cost = double.tryParse(val.trim());
     final margin = double.tryParse(_marginController.text.trim());
-    if (cost != null && cost >= 0 && margin != null) {
+    final wsMargin = double.tryParse(_wholesaleMarginController.text.trim());
+    if (cost != null && cost >= 0) {
       _isCalculating = true;
-      final retail = cost + (cost * (margin / 100.0));
-      _priceController.text = retail > 0 ? retail.toStringAsFixed(2) : '';
+      if (margin != null) {
+        final retail = cost + (cost * (margin / 100.0));
+        _priceController.text = retail > 0 ? retail.toStringAsFixed(2) : '';
+      }
+      if (wsMargin != null) {
+        final ws = cost + (cost * (wsMargin / 100.0));
+        _wholesalePriceController.text = ws > 0 ? ws.toStringAsFixed(2) : '';
+      }
       _isCalculating = false;
       setState(() {});
     } else {
@@ -165,15 +193,89 @@ class _AddEditItemDialogState extends State<AddEditItemDialog> {
     }
   }
 
+  void _onWholesaleMarginChanged(String val) {
+    if (_isCalculating) return;
+    final margin = double.tryParse(val.trim());
+    final cost = double.tryParse(_costPriceController.text.trim());
+    if (cost != null && cost >= 0 && margin != null) {
+      _isCalculating = true;
+      final ws = cost + (cost * (margin / 100.0));
+      _wholesalePriceController.text = ws > 0 ? ws.toStringAsFixed(2) : '';
+      _isCalculating = false;
+      setState(() {});
+    } else {
+      setState(() {});
+    }
+  }
+
+  void _setWholesaleMarginPreset(double percent) {
+    _isCalculating = true;
+    _wholesaleMarginController.text = percent.truncateToDouble() == percent
+        ? percent.toStringAsFixed(0)
+        : percent.toStringAsFixed(1);
+    final cost = double.tryParse(_costPriceController.text.trim());
+    if (cost != null && cost >= 0) {
+      final ws = cost + (cost * (percent / 100.0));
+      _wholesalePriceController.text = ws > 0 ? ws.toStringAsFixed(2) : '';
+    }
+    _isCalculating = false;
+    setState(() {});
+  }
+
+  void _onWholesalePriceChanged(String val) {
+    if (_isCalculating) return;
+    final ws = double.tryParse(val.trim());
+    final cost = double.tryParse(_costPriceController.text.trim());
+    if (ws != null && cost != null && cost > 0) {
+      _isCalculating = true;
+      final margin = ((ws - cost) / cost) * 100.0;
+      if (margin >= 0) {
+        _wholesaleMarginController.text = margin.truncateToDouble() == margin
+            ? margin.toStringAsFixed(0)
+            : margin.toStringAsFixed(1);
+      }
+      _isCalculating = false;
+      setState(() {});
+    } else {
+      setState(() {});
+    }
+  }
+
   void _submit() {
+    AppStateProvider? appState;
+    try {
+      appState = Provider.of<AppStateProvider>(context, listen: false);
+    } catch (_) {}
+
+    final canViewCost = appState?.canViewCostPrice ?? true;
+    final existingItem = widget.item;
+
     final name = _nameController.text.trim();
     final sku = _skuController.text.trim().toUpperCase();
-    final costPrice = double.tryParse(_costPriceController.text.trim()) ?? 0.0;
-    final marginPercent = double.tryParse(_marginController.text.trim()) ?? 20.0;
-    var price = double.tryParse(_priceController.text.trim()) ?? 0.0;
 
-    if (price <= 0 && costPrice > 0) {
+    // Preserve confidential cost price and margin if staff does not have cost permission
+    final costPrice = canViewCost
+        ? (double.tryParse(_costPriceController.text.trim()) ?? 0.0)
+        : (existingItem?.costPrice ?? 0.0);
+
+    final marginPercent = canViewCost
+        ? (double.tryParse(_marginController.text.trim()) ?? 20.0)
+        : existingItem?.marginPercent;
+
+    final wholesaleMarginPercent = canViewCost
+        ? (double.tryParse(_wholesaleMarginController.text.trim()) ?? 15.0)
+        : existingItem?.wholesaleMarginPercent;
+
+    var price = double.tryParse(_priceController.text.trim()) ?? 0.0;
+    if (price <= 0 && costPrice > 0 && marginPercent != null) {
       price = costPrice + (costPrice * (marginPercent / 100.0));
+    }
+
+    var wholesalePrice = double.tryParse(_wholesalePriceController.text.trim()) ?? 0.0;
+    if (wholesalePrice <= 0 && costPrice > 0 && wholesaleMarginPercent != null) {
+      wholesalePrice = costPrice + (costPrice * (wholesaleMarginPercent / 100.0));
+    } else if (wholesalePrice <= 0 && price > 0) {
+      wholesalePrice = price;
     }
 
     final quantity = int.tryParse(_quantityController.text.trim()) ?? 0;
@@ -186,15 +288,18 @@ class _AddEditItemDialogState extends State<AddEditItemDialog> {
       return;
     }
 
-    // Save preferred margin locally
-    SharedPreferences.getInstance().then((prefs) {
-      prefs.setDouble('preferred_margin_percent', marginPercent);
-    });
+    // Save preferred margin locally if permitted
+    if (canViewCost && marginPercent != null) {
+      SharedPreferences.getInstance().then((prefs) {
+        prefs.setDouble('preferred_margin_percent', marginPercent);
+      });
+    }
 
     final now = DateTime.now();
-    final existingItem = widget.item;
     final priceChanged = (existingItem != null) &&
-        (existingItem.price != price || existingItem.costPrice != costPrice);
+        (existingItem.price != price ||
+         existingItem.wholesalePrice != wholesalePrice ||
+         existingItem.costPrice != costPrice);
     final stockChanged = (existingItem != null) && (existingItem.quantity != quantity);
 
     List<PriceHistoryEntry> history;
@@ -205,8 +310,10 @@ class _AddEditItemDialogState extends State<AddEditItemDialog> {
           PriceHistoryEntry(
             timestamp: now,
             price: price,
+            wholesalePrice: wholesalePrice,
             costPrice: costPrice,
             marginPercent: marginPercent,
+            wholesaleMarginPercent: wholesaleMarginPercent,
             note: 'Price modified via Edit',
           ),
         );
@@ -216,8 +323,10 @@ class _AddEditItemDialogState extends State<AddEditItemDialog> {
         PriceHistoryEntry(
           timestamp: now,
           price: price,
+          wholesalePrice: wholesalePrice,
           costPrice: costPrice,
           marginPercent: marginPercent,
+          wholesaleMarginPercent: wholesaleMarginPercent,
           note: 'Initial Price',
         ),
       ];
@@ -229,8 +338,10 @@ class _AddEditItemDialogState extends State<AddEditItemDialog> {
       sku: sku,
       category: _selectedCategory,
       price: price,
+      wholesalePrice: wholesalePrice,
       costPrice: costPrice,
       marginPercent: marginPercent,
+      wholesaleMarginPercent: wholesaleMarginPercent,
       quantity: quantity,
       minThreshold: minThreshold,
       lastUpdated: now,
@@ -658,10 +769,14 @@ class _AddEditItemDialogState extends State<AddEditItemDialog> {
                       ],
                     );
 
+                    final canViewCost = appState?.canViewCostPrice ?? true;
                     final costVal = double.tryParse(_costPriceController.text.trim()) ?? 0.0;
                     final priceVal = double.tryParse(_priceController.text.trim()) ?? 0.0;
+                    final wholesaleVal = double.tryParse(_wholesalePriceController.text.trim()) ?? 0.0;
                     final profitPerUnit = priceVal - costVal;
+                    final wsProfitPerUnit = wholesaleVal - costVal;
                     final currentMargin = double.tryParse(_marginController.text.trim());
+                    final currentWsMargin = double.tryParse(_wholesaleMarginController.text.trim());
 
                     final costField = Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -688,7 +803,7 @@ class _AddEditItemDialogState extends State<AddEditItemDialog> {
                           children: [
                             Flexible(
                               child: Text(
-                                'Margin (%)',
+                                'Retail Margin (%)',
                                 style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w600),
                                 overflow: TextOverflow.ellipsis,
                               ),
@@ -804,11 +919,160 @@ class _AddEditItemDialogState extends State<AddEditItemDialog> {
                       ],
                     );
 
+                    final wholesaleMarginField = Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Flexible(
+                              child: Text(
+                                'Wholesale Margin (%)',
+                                style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w600),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            if (costVal > 0 && wsProfitPerUnit > 0) ...[
+                              const SizedBox(width: 4),
+                              Flexible(
+                                child: Text(
+                                  '+\$${wsProfitPerUnit.toStringAsFixed(2)} profit',
+                                  style: GoogleFonts.outfit(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                    color: AppColors.accentEmerald,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                        const SizedBox(height: 6),
+                        TextField(
+                          controller: _wholesaleMarginController,
+                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                          onChanged: _onWholesaleMarginChanged,
+                          decoration: InputDecoration(
+                            hintText: '15',
+                            prefixIcon: const Icon(Icons.percent_rounded),
+                            suffixText: '%',
+                            suffixStyle: GoogleFonts.outfit(
+                              fontWeight: FontWeight.bold,
+                              color: AppColors.accentIndigo,
+                            ),
+                          ),
+                        ),
+                      ],
+                    );
+
+                    final wholesalePresetChips = Wrap(
+                      spacing: 6,
+                      runSpacing: 6,
+                      children: [5.0, 10.0, 15.0, 20.0, 25.0, 30.0].map((preset) {
+                        final isSelected = currentWsMargin != null && (currentWsMargin - preset).abs() < 0.01;
+                        return InkWell(
+                          borderRadius: BorderRadius.circular(8),
+                          onTap: () => _setWholesaleMarginPreset(preset),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: isSelected
+                                  ? AppColors.accentIndigo.withValues(alpha: 0.25)
+                                  : (isDark
+                                      ? Colors.white.withValues(alpha: 0.05)
+                                      : Colors.black.withValues(alpha: 0.04)),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(
+                                color: isSelected
+                                    ? AppColors.accentIndigo
+                                    : (isDark ? AppColors.darkGlassBorder : AppColors.lightGlassBorder),
+                              ),
+                            ),
+                            child: Text(
+                              '+${preset.toInt()}%',
+                              style: GoogleFonts.outfit(
+                                fontSize: 11,
+                                fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                                color: isSelected
+                                    ? AppColors.accentIndigo
+                                    : (isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary),
+                              ),
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    );
+
+                    final wholesalePriceField = Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Flexible(
+                              child: Text(
+                                'Wholesale Price (\$)',
+                                style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w600),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            const SizedBox(width: 4),
+                            Flexible(
+                              child: Text(
+                                '(Bulk / B2B)',
+                                style: GoogleFonts.outfit(
+                                  fontSize: 11,
+                                  color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 6),
+                        TextField(
+                          controller: _wholesalePriceController,
+                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                          onChanged: _onWholesalePriceChanged,
+                          decoration: const InputDecoration(
+                            hintText: '0.00',
+                            prefixIcon: Icon(Icons.storefront_rounded),
+                          ),
+                        ),
+                      ],
+                    );
+
+                    Widget? costRestrictedNotice;
+                    if (!canViewCost) {
+                      costRestrictedNotice = Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: AppColors.accentIndigo.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: AppColors.accentIndigo.withValues(alpha: 0.2)),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.lock_outline_rounded, size: 16, color: AppColors.accentIndigo),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                'Cost price and profit margins are confidential to Shop Owner & Full Access Staff.',
+                                style: GoogleFonts.outfit(fontSize: 11.5, color: AppColors.accentIndigo),
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    }
+
                     Widget? summaryBanner;
-                    if (costVal > 0 && priceVal > 0) {
+                    if (canViewCost && costVal > 0 && priceVal > 0) {
                       final isProfit = profitPerUnit >= 0;
                       final badgeColor = isProfit ? AppColors.accentEmerald : AppColors.accentRose;
                       final effectiveMargin = ((priceVal - costVal) / costVal) * 100.0;
+                      final wsProfit = wholesaleVal > 0 ? wholesaleVal - costVal : 0.0;
 
                       summaryBanner = Container(
                         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
@@ -817,26 +1081,44 @@ class _AddEditItemDialogState extends State<AddEditItemDialog> {
                           borderRadius: BorderRadius.circular(12),
                           border: Border.all(color: badgeColor.withValues(alpha: 0.3)),
                         ),
-                        child: Row(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Icon(
-                              isProfit ? Icons.trending_up_rounded : Icons.trending_down_rounded,
-                              size: 18,
-                              color: badgeColor,
+                            Row(
+                              children: [
+                                Icon(
+                                  isProfit ? Icons.trending_up_rounded : Icons.trending_down_rounded,
+                                  size: 18,
+                                  color: badgeColor,
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Text(
+                                    isProfit
+                                        ? 'Retail Profit: \$${profitPerUnit.toStringAsFixed(2)} per item (${effectiveMargin.toStringAsFixed(1)}% margin)'
+                                        : 'Warning: Retail selling at loss of \$${(-profitPerUnit).toStringAsFixed(2)} per item',
+                                    style: GoogleFonts.outfit(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600,
+                                      color: isDark ? Colors.white : Colors.black87,
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: Text(
-                                isProfit
-                                    ? 'Profit: \$${profitPerUnit.toStringAsFixed(2)} per item (${effectiveMargin.toStringAsFixed(1)}% margin)'
-                                    : 'Warning: Selling at a loss of \$${(-profitPerUnit).toStringAsFixed(2)} per item',
-                                style: GoogleFonts.outfit(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w600,
-                                  color: isDark ? Colors.white : Colors.black87,
+                            if (wholesaleVal > 0) ...[
+                              const SizedBox(height: 4),
+                              Padding(
+                                padding: const EdgeInsets.only(left: 28),
+                                child: Text(
+                                  'Wholesale Profit: \$${wsProfit.toStringAsFixed(2)} per item (${costVal > 0 ? ((wsProfit / costVal) * 100).toStringAsFixed(1) : '0'}% margin)',
+                                  style: GoogleFonts.outfit(
+                                    fontSize: 11,
+                                    color: isDark ? Colors.white70 : Colors.black87,
+                                  ),
                                 ),
                               ),
-                            ),
+                            ],
                           ],
                         ),
                       );
@@ -882,13 +1164,26 @@ class _AddEditItemDialogState extends State<AddEditItemDialog> {
                           const SizedBox(height: 16),
                           categoryField,
                           const SizedBox(height: 16),
-                          costField,
-                          const SizedBox(height: 16),
-                          marginField,
-                          const SizedBox(height: 8),
-                          presetChips,
-                          const SizedBox(height: 16),
+                          if (canViewCost) ...[
+                            costField,
+                            const SizedBox(height: 16),
+                            marginField,
+                            const SizedBox(height: 8),
+                            presetChips,
+                            const SizedBox(height: 16),
+                          ] else if (costRestrictedNotice != null) ...[
+                            costRestrictedNotice,
+                            const SizedBox(height: 16),
+                          ],
                           priceField,
+                          const SizedBox(height: 16),
+                          if (canViewCost) ...[
+                            wholesaleMarginField,
+                            const SizedBox(height: 8),
+                            wholesalePresetChips,
+                            const SizedBox(height: 16),
+                          ],
+                          wholesalePriceField,
                           if (summaryBanner != null) ...[
                             const SizedBox(height: 12),
                             summaryBanner,
@@ -912,25 +1207,48 @@ class _AddEditItemDialogState extends State<AddEditItemDialog> {
                           ],
                         ),
                         const SizedBox(height: 16),
+                        if (canViewCost) ...[
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(child: costField),
+                              const SizedBox(width: 16),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    marginField,
+                                    const SizedBox(height: 6),
+                                    presetChips,
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 16),
+                        ] else if (costRestrictedNotice != null) ...[
+                          costRestrictedNotice,
+                          const SizedBox(height: 16),
+                        ],
                         Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Expanded(child: costField),
+                            Expanded(child: priceField),
                             const SizedBox(width: 16),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  marginField,
-                                  const SizedBox(height: 6),
-                                  presetChips,
-                                ],
-                              ),
-                            ),
+                            Expanded(child: wholesalePriceField),
                           ],
                         ),
-                        const SizedBox(height: 16),
-                        priceField,
+                        if (canViewCost) ...[
+                          const SizedBox(height: 16),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              wholesaleMarginField,
+                              const SizedBox(height: 6),
+                              wholesalePresetChips,
+                            ],
+                          ),
+                        ],
                         if (summaryBanner != null) ...[
                           const SizedBox(height: 12),
                           summaryBanner,

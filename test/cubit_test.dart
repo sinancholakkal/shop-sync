@@ -12,6 +12,7 @@ import 'package:shop_sync_app/core/services/session_storage_service.dart';
 import 'package:shop_sync_app/features/dashboard/presentation/screens/app_shell.dart';
 import 'package:shop_sync_app/features/staff/domain/models/staff_model.dart';
 import 'package:shop_sync_app/features/inventory/presentation/screens/inventory_screen.dart';
+import 'package:shop_sync_app/features/inventory/presentation/screens/product_detail_screen.dart';
 import 'package:shop_sync_app/features/inventory/presentation/widgets/add_edit_item_dialog.dart';
 import 'package:shop_sync_app/data/repositories/mock_data_repository.dart';
 import 'package:shop_sync_app/main.dart';
@@ -752,13 +753,12 @@ void main() {
       await tester.enterText(costPriceFinder, '100.00');
       await tester.pump();
 
-      // Tap Preset '+25%' chip
-      final chip25 = find.text('+25%');
-      expect(chip25, findsOneWidget);
+      // Tap Retail Preset '+25%' chip (first chip belongs to retail margin presets)
+      final chip25 = find.text('+25%').first;
       await tester.tap(chip25);
       await tester.pump();
 
-      // Retail Price should now be automatically calculated as 125.00
+      // Retail Price should now be automatically calculated as 125.00 (100 + 25%)
       expect(find.text('125.00'), findsOneWidget);
 
       // Scroll to submit button and tap
@@ -907,8 +907,165 @@ void main() {
         expect(item.stockLastUpdated, isNotNull);
         expect(item.priceHistory.isNotEmpty, isTrue);
         expect(item.priceHistory.last.price, item.price);
+        expect(item.priceHistory.last.wholesalePrice, item.wholesalePrice);
         expect(item.priceHistory.last.costPrice, item.costPrice);
       }
+    });
+
+    test('StaffPermission and AppStateProvider canViewCostPrice permissions strictly enforce privacy', () {
+      // Permission model checks
+      expect(StaffPermission.fullAccess.canViewCostPrice, isTrue);
+      expect(StaffPermission.stockCounting.canViewCostPrice, isFalse);
+      expect(StaffPermission.readOnly.canViewCostPrice, isFalse);
+
+      final appState = AppStateProvider();
+
+      // Owner always has cost view permission
+      appState.loginAsOwner('owner@shop.com');
+      expect(appState.isOwner, isTrue);
+      expect(appState.canViewCostPrice, isTrue);
+
+      // Staff with Full Access has cost view permission
+      appState.loginAsStaff(StaffMember(
+        id: 'stf_full',
+        name: 'Sarah Full',
+        email: 'sarah@shop.com',
+        permission: StaffPermission.fullAccess,
+        shopId: 'SHOP-1',
+        joinedDate: DateTime.now(),
+      ));
+      expect(appState.isOwner, isFalse);
+      expect(appState.canViewCostPrice, isTrue);
+
+      // Staff with Stock Counting Only CANNOT view cost price
+      appState.loginAsStaff(StaffMember(
+        id: 'stf_stock',
+        name: 'Alex Stock',
+        email: 'alex@shop.com',
+        permission: StaffPermission.stockCounting,
+        shopId: 'SHOP-1',
+        joinedDate: DateTime.now(),
+      ));
+      expect(appState.isOwner, isFalse);
+      expect(appState.canViewCostPrice, isFalse);
+
+      // Staff with Read Only CANNOT view cost price
+      appState.loginAsStaff(StaffMember(
+        id: 'stf_read',
+        name: 'David Read',
+        email: 'david@shop.com',
+        permission: StaffPermission.readOnly,
+        shopId: 'SHOP-1',
+        joinedDate: DateTime.now(),
+      ));
+      expect(appState.isOwner, isFalse);
+      expect(appState.canViewCostPrice, isFalse);
+    });
+
+    test('InventoryItem wholesale calculations and Firestore serialization work properly', () {
+      final now = DateTime.now();
+      final item = InventoryItem(
+        id: 'ws_item_1',
+        name: 'Gaming Headset',
+        sku: 'AUD-GH-01',
+        category: 'Electronics',
+        price: 200.00,
+        wholesalePrice: 150.00,
+        costPrice: 100.00,
+        quantity: 20,
+        minThreshold: 5,
+        lastUpdated: now,
+      );
+
+      // Calculations
+      expect(item.profitPerUnit, 100.00); // 200 - 100
+      expect(item.wholesaleProfitPerUnit, 50.00); // 150 - 100
+      expect(item.calculatedMarginPercent, 100.0); // (200 - 100) / 100 * 100
+      expect(item.calculatedWholesaleMarginPercent, 50.0); // (150 - 100) / 100 * 100
+      expect(item.totalStockValue, 4000.00); // 200 * 20
+      expect(item.totalStockWholesaleValue, 3000.00); // 150 * 20
+      expect(item.totalStockCost, 2000.00); // 100 * 20
+
+      // Serialization round-trip
+      final map = item.toMap();
+      expect(map['wholesalePrice'], 150.00);
+      expect(map['wholesaleMarginPercent'], 50.0);
+
+      final revived = InventoryItem.fromMap(map, 'ws_item_1');
+      expect(revived.wholesalePrice, 150.00);
+      expect(revived.wholesaleProfitPerUnit, 50.00);
+      expect(revived.effectiveWholesaleMarginPercent, 50.0);
+
+      // Backward compatibility when wholesalePrice is missing from legacy map
+      final legacyMap = Map<String, dynamic>.from(map)..remove('wholesalePrice')..remove('wholesaleMarginPercent');
+      final legacyRevived = InventoryItem.fromMap(legacyMap, 'legacy_item');
+      expect(legacyRevived.wholesalePrice, 200.00); // falls back to retail price
+    });
+
+    testWidgets('ProductDetailScreen hides Cost Price and Profit Margin for Stock Counting Staff', (tester) async {
+      final appState = AppStateProvider();
+      final testItem = InventoryItem(
+        id: 'priv_item_1',
+        name: 'Confidential Cost Product',
+        sku: 'PRIV-01',
+        category: 'Electronics',
+        price: 199.99,
+        wholesalePrice: 149.99,
+        costPrice: 89.99,
+        quantity: 12,
+        minThreshold: 5,
+        lastUpdated: DateTime.now(),
+      );
+      appState.addInventoryItem(testItem);
+
+      // 1. As Owner: Cost Price and Margin MUST be visible
+      appState.loginAsOwner('owner@shop.com');
+      await tester.pumpWidget(
+        MultiProvider(
+          providers: [
+            ChangeNotifierProvider(create: (_) => ThemeProvider()),
+            ChangeNotifierProvider.value(value: appState),
+          ],
+          child: MaterialApp(
+            home: ProductDetailScreen(itemId: testItem.id),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Cost (Acquisition) Price'), findsOneWidget);
+      expect(find.text('Retail Profit Margin'), findsOneWidget);
+      expect(find.text('Wholesale Price'), findsOneWidget);
+      expect(find.text('\$149.99'), findsWidgets);
+
+      // 2. As Staff with Stock Counting Only: Cost Price and Margin MUST be hidden
+      appState.loginAsStaff(StaffMember(
+        id: 'stf_count',
+        name: 'Counter Bob',
+        email: 'bob@shop.com',
+        permission: StaffPermission.stockCounting,
+        shopId: 'SHOP-1',
+        joinedDate: DateTime.now(),
+      ));
+      await tester.pumpWidget(
+        MultiProvider(
+          providers: [
+            ChangeNotifierProvider(create: (_) => ThemeProvider()),
+            ChangeNotifierProvider.value(value: appState),
+          ],
+          child: MaterialApp(
+            home: ProductDetailScreen(itemId: testItem.id),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Cost (Acquisition) Price'), findsNothing);
+      expect(find.text('Retail Profit Margin'), findsNothing);
+      expect(find.text('Cost value:'), findsNothing);
+      // Wholesale Price remains accessible
+      expect(find.text('Wholesale Price'), findsOneWidget);
+      expect(find.text('\$149.99'), findsWidgets);
     });
   });
 }

@@ -41,5 +41,6 @@ enum StaffPermission {
 
   bool get canModifyItems => this == StaffPermission.fullAccess;
   bool get canUpdateStockCount => this == StaffPermission.fullAccess || this == StaffPermission.stockCounting;
+  bool get canViewCostPrice => this == StaffPermission.fullAccess;
   bool get canManageStaff => false; // Only owner can manage staff
 }

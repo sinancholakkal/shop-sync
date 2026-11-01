@@ -177,8 +177,10 @@ class AppStateProvider extends ChangeNotifier {
 
   /// Role-based permission check:
   /// Shop Owner and Staff with Full Access (canModifyItems) can add/edit/delete product categories.
-  /// Staff with Stock Counting Only or Read-Only are restricted.
   bool get canManageCategories => isOwner || effectivePermission.canModifyItems;
+  bool get canModifyItems => isOwner || effectivePermission.canModifyItems;
+  bool get canUpdateStockCount => isOwner || effectivePermission.canUpdateStockCount;
+  bool get canViewCostPrice => isOwner || effectivePermission.canViewCostPrice;
 
   /// Aggregated list of all available product categories (capped at maxCategoryLimit = 5)
   List<String> get allProductCategories {

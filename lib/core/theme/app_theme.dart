@@ -11,6 +11,7 @@ class AppColors {
   static const Color accentEmerald = Color(0xFF10B981);
   static const Color accentAmber = Color(0xFFF59E0B);
   static const Color accentRose = Color(0xFFF43F5E);
+  static const Color accentIndigo = Color(0xFF6366F1);
 
   // Dark Theme Glass Tokens
   static const Color darkBg = Color(0xFF0B0F19);
