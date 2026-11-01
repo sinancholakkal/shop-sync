@@ -161,6 +161,7 @@ class FirestoreService {
       final firestore = _firestore;
       if (firestore == null) return;
 
+      final now = DateTime.now().toIso8601String();
       await firestore
           .collection('shops')
           .doc(shopId)
@@ -168,7 +169,8 @@ class FirestoreService {
           .doc(itemId)
           .update({
         'quantity': newQuantity,
-        'lastUpdated': DateTime.now().toIso8601String(),
+        'stockLastUpdated': now,
+        'lastUpdated': now,
       });
     } catch (e) {
       debugPrint('FirestoreService: updateStockQuantity notice: $e');

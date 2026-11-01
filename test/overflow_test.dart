@@ -10,8 +10,10 @@ import 'package:shop_sync_app/features/auth/presentation/screens/staff_details_i
 import 'package:shop_sync_app/features/auth/presentation/screens/staff_pending_approval_screen.dart';
 import 'package:shop_sync_app/features/auth/presentation/screens/staff_qr_login_screen.dart';
 import 'package:shop_sync_app/features/inventory/domain/models/inventory_item.dart';
+import 'package:shop_sync_app/features/inventory/presentation/screens/product_detail_screen.dart';
 import 'package:shop_sync_app/features/inventory/presentation/widgets/add_edit_item_dialog.dart';
 import 'package:shop_sync_app/features/inventory/presentation/widgets/category_manager_modal.dart';
+import 'package:shop_sync_app/features/inventory/presentation/widgets/price_history_chart.dart';
 import 'package:shop_sync_app/features/staff/domain/models/staff_model.dart';
 import 'package:shop_sync_app/features/staff/presentation/widgets/permission_modal.dart';
 import 'package:shop_sync_app/main.dart';
@@ -227,6 +229,88 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Manage Categories'), findsOneWidget);
+    });
+
+    testWidgets('ProductDetailScreen renders with zero overflow on compact mobile (320x568)', (tester) async {
+      tester.view.physicalSize = const Size(320, 568);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      final appState = AppStateProvider();
+      final dummyItem = InventoryItem(
+        id: 'inv_detail_test',
+        name: 'Pro Wireless Headphones',
+        sku: 'AUD-WL-01',
+        category: 'Electronics',
+        price: 249.99,
+        costPrice: 150.00,
+        quantity: 24,
+        minThreshold: 5,
+        createdAt: DateTime.now().subtract(const Duration(days: 45)),
+        lastUpdated: DateTime.now().subtract(const Duration(days: 2)),
+        priceLastUpdated: DateTime.now().subtract(const Duration(days: 5)),
+        stockLastUpdated: DateTime.now().subtract(const Duration(hours: 3)),
+        priceHistory: [
+          PriceHistoryEntry(
+            timestamp: DateTime.now().subtract(const Duration(days: 45)),
+            price: 299.99,
+            costPrice: 180.00,
+            marginPercent: 40.0,
+          ),
+          PriceHistoryEntry(
+            timestamp: DateTime.now().subtract(const Duration(days: 20)),
+            price: 279.99,
+            costPrice: 160.00,
+            marginPercent: 42.8,
+          ),
+          PriceHistoryEntry(
+            timestamp: DateTime.now().subtract(const Duration(days: 5)),
+            price: 249.99,
+            costPrice: 150.00,
+            marginPercent: 40.0,
+          ),
+        ],
+      );
+      appState.addInventoryItem(dummyItem);
+
+      await tester.pumpWidget(
+        MultiProvider(
+          providers: [
+            ChangeNotifierProvider(create: (_) => ThemeProvider()),
+            ChangeNotifierProvider.value(value: appState),
+          ],
+          child: MaterialApp(
+            home: ProductDetailScreen(itemId: dummyItem.id),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Product Details'), findsOneWidget);
+      expect(find.text(dummyItem.name), findsOneWidget);
+      expect(find.textContaining(dummyItem.sku), findsOneWidget);
+      expect(find.byType(PriceHistoryChart), findsOneWidget);
+      expect(find.text('Audit Timestamps & System Logs'), findsOneWidget);
+      expect(find.text('Price Revision History'), findsOneWidget);
+
+      // Verify chart filter toggling
+      final thirtyDaysTab = find.text('30 Days');
+      expect(thirtyDaysTab, findsOneWidget);
+      await tester.ensureVisible(thirtyDaysTab);
+      await tester.pumpAndSettle();
+      await tester.tap(thirtyDaysTab);
+      await tester.pumpAndSettle();
+
+      final sevenDaysTab = find.text('7 Days');
+      expect(sevenDaysTab, findsOneWidget);
+      await tester.ensureVisible(sevenDaysTab);
+      await tester.pumpAndSettle();
+      await tester.tap(sevenDaysTab);
+      await tester.pumpAndSettle();
+
+      // Ensure no overflow errors occurred
+      expect(tester.takeException(), isNull);
     });
   });
 }

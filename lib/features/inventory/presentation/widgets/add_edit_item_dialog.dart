@@ -191,8 +191,40 @@ class _AddEditItemDialogState extends State<AddEditItemDialog> {
       prefs.setDouble('preferred_margin_percent', marginPercent);
     });
 
+    final now = DateTime.now();
+    final existingItem = widget.item;
+    final priceChanged = (existingItem != null) &&
+        (existingItem.price != price || existingItem.costPrice != costPrice);
+    final stockChanged = (existingItem != null) && (existingItem.quantity != quantity);
+
+    List<PriceHistoryEntry> history;
+    if (existingItem != null && existingItem.priceHistory.isNotEmpty) {
+      history = List.from(existingItem.priceHistory);
+      if (priceChanged) {
+        history.add(
+          PriceHistoryEntry(
+            timestamp: now,
+            price: price,
+            costPrice: costPrice,
+            marginPercent: marginPercent,
+            note: 'Price modified via Edit',
+          ),
+        );
+      }
+    } else {
+      history = [
+        PriceHistoryEntry(
+          timestamp: now,
+          price: price,
+          costPrice: costPrice,
+          marginPercent: marginPercent,
+          note: 'Initial Price',
+        ),
+      ];
+    }
+
     final item = InventoryItem(
-      id: widget.item?.id ?? 'inv_${DateTime.now().millisecondsSinceEpoch}',
+      id: existingItem?.id ?? 'inv_${now.millisecondsSinceEpoch}',
       name: name,
       sku: sku,
       category: _selectedCategory,
@@ -201,7 +233,11 @@ class _AddEditItemDialogState extends State<AddEditItemDialog> {
       marginPercent: marginPercent,
       quantity: quantity,
       minThreshold: minThreshold,
-      lastUpdated: DateTime.now(),
+      lastUpdated: now,
+      priceLastUpdated: priceChanged ? now : (existingItem?.priceLastUpdated ?? now),
+      stockLastUpdated: stockChanged ? now : (existingItem?.stockLastUpdated ?? now),
+      createdAt: existingItem?.createdAt ?? now,
+      priceHistory: history,
     );
 
     widget.onSave(item);

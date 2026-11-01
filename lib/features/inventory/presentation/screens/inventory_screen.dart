@@ -6,6 +6,7 @@ import 'package:shop_sync_app/core/theme/app_theme.dart';
 import 'package:shop_sync_app/core/widgets/glass_container.dart';
 import 'package:shop_sync_app/core/widgets/responsive_layout.dart';
 import 'package:shop_sync_app/features/inventory/domain/models/inventory_item.dart';
+import 'package:shop_sync_app/features/inventory/presentation/screens/product_detail_screen.dart';
 import 'package:shop_sync_app/features/inventory/presentation/widgets/add_edit_item_dialog.dart';
 import 'package:shop_sync_app/features/inventory/presentation/widgets/category_manager_modal.dart';
 import 'package:shop_sync_app/shared/providers/app_state_provider.dart';
@@ -642,6 +643,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
                             item: item,
                             canModify: canAddEdit,
                             canCount: canCount,
+                            onTap: () => ProductDetailScreen.push(context, item.id),
                             onEdit: () {
                               AddEditItemDialog.show(
                                 context,
@@ -703,6 +705,7 @@ class _InventoryCard extends StatelessWidget {
   final InventoryItem item;
   final bool canModify;
   final bool canCount;
+  final VoidCallback? onTap;
   final VoidCallback onEdit;
   final VoidCallback onDelete;
   final Function(int delta) onAdjustQuantity;
@@ -711,10 +714,20 @@ class _InventoryCard extends StatelessWidget {
     required this.item,
     required this.canModify,
     required this.canCount,
+    this.onTap,
     required this.onEdit,
     required this.onDelete,
     required this.onAdjustQuantity,
   });
+
+  String _formatRelativeTime(DateTime time) {
+    final diff = DateTime.now().difference(time);
+    if (diff.inSeconds < 60) return 'just now';
+    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
+    if (diff.inHours < 24) return '${diff.inHours}h ago';
+    if (diff.inDays < 7) return '${diff.inDays}d ago';
+    return DateFormat('MMM d').format(time);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -734,15 +747,20 @@ class _InventoryCard extends StatelessWidget {
       badgeText = 'In Stock (${item.quantity})';
     }
 
-    return GlassContainer(
-      borderRadius: 20,
-      padding: const EdgeInsets.all(18),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          // Top row: category & status badge & menu
-          Row(
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(20),
+        onTap: onTap,
+        child: GlassContainer(
+          borderRadius: 20,
+          padding: const EdgeInsets.all(18),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              // Top row: category & status badge & menu
+              Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Flexible(
@@ -861,12 +879,26 @@ class _InventoryCard extends StatelessWidget {
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    'Price',
-                    style: GoogleFonts.outfit(
-                      fontSize: 11,
-                      color: isDark ? Colors.white54 : Colors.black45,
-                    ),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'Price',
+                        style: GoogleFonts.outfit(
+                          fontSize: 11,
+                          color: isDark ? Colors.white54 : Colors.black45,
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        '• ${_formatRelativeTime(item.priceLastUpdated)}',
+                        style: GoogleFonts.outfit(
+                          fontSize: 10,
+                          color: AppColors.primaryLight,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
                   ),
                   Text(
                     currencyFmt.format(item.price),
@@ -928,6 +960,8 @@ class _InventoryCard extends StatelessWidget {
           ),
         ],
       ),
-    );
+    ),
+  ),
+);
   }
 }

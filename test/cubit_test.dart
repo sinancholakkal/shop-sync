@@ -13,6 +13,7 @@ import 'package:shop_sync_app/features/dashboard/presentation/screens/app_shell.
 import 'package:shop_sync_app/features/staff/domain/models/staff_model.dart';
 import 'package:shop_sync_app/features/inventory/presentation/screens/inventory_screen.dart';
 import 'package:shop_sync_app/features/inventory/presentation/widgets/add_edit_item_dialog.dart';
+import 'package:shop_sync_app/data/repositories/mock_data_repository.dart';
 import 'package:shop_sync_app/main.dart';
 import 'package:shop_sync_app/shared/cubit/shop_sync_cubit.dart';
 import 'package:shop_sync_app/shared/providers/app_state_provider.dart';
@@ -773,6 +774,141 @@ void main() {
       expect(savedItem!.marginPercent, 25.0);
       expect(savedItem!.price, 125.00);
       expect(savedItem!.profitPerUnit, 25.0);
+    });
+  });
+
+  group('Product Tracking: Timestamps & Price History', () {
+    test('InventoryItem stores, persists, and deserializes timestamps and priceHistory', () {
+      final now = DateTime.now();
+      final created = now.subtract(const Duration(days: 30));
+      final priceUpdated = now.subtract(const Duration(days: 2));
+      final stockUpdated = now.subtract(const Duration(hours: 4));
+
+      final item = InventoryItem(
+        id: 'track_1',
+        name: 'OLED Gaming Monitor 34"',
+        sku: 'MON-OLED-34',
+        category: 'Electronics',
+        price: 899.99,
+        costPrice: 650.00,
+        quantity: 15,
+        minThreshold: 3,
+        createdAt: created,
+        lastUpdated: now,
+        priceLastUpdated: priceUpdated,
+        stockLastUpdated: stockUpdated,
+        priceHistory: [
+          PriceHistoryEntry(
+            timestamp: created,
+            price: 999.99,
+            costPrice: 700.00,
+            marginPercent: 42.8,
+            note: 'Initial Release',
+          ),
+          PriceHistoryEntry(
+            timestamp: priceUpdated,
+            price: 899.99,
+            costPrice: 650.00,
+            marginPercent: 38.4,
+            note: 'Price Reduction',
+          ),
+        ],
+      );
+
+      final map = item.toMap();
+      expect(map['priceLastUpdated'], priceUpdated.toIso8601String());
+      expect(map['stockLastUpdated'], stockUpdated.toIso8601String());
+      expect(map['createdAt'], created.toIso8601String());
+      expect(map['lastUpdated'], now.toIso8601String());
+      expect(map['priceHistory'], isA<List>());
+      expect((map['priceHistory'] as List).length, 2);
+
+      final revived = InventoryItem.fromMap(map, 'track_1');
+      expect(revived.id, 'track_1');
+      expect(revived.name, 'OLED Gaming Monitor 34"');
+      expect(revived.priceLastUpdated, priceUpdated);
+      expect(revived.stockLastUpdated, stockUpdated);
+      expect(revived.createdAt, created);
+      expect(revived.priceHistory.length, 2);
+      expect(revived.priceHistory.last.price, 899.99);
+      expect(revived.priceHistory.last.costPrice, 650.00);
+      expect(revived.priceHistory.last.note, 'Price Reduction');
+    });
+
+    test('copyWith auto-detects price changes, updates priceLastUpdated and appends to priceHistory', () {
+      final initialTime = DateTime(2026, 1, 1, 10, 0);
+      final item = InventoryItem(
+        id: 'item_cw',
+        name: 'Coffee Beans 1kg',
+        sku: 'GROC-CF-01',
+        category: 'Groceries',
+        price: 24.99,
+        costPrice: 15.00,
+        quantity: 50,
+        minThreshold: 5,
+        createdAt: initialTime,
+        lastUpdated: initialTime,
+        priceLastUpdated: initialTime,
+        stockLastUpdated: initialTime,
+        priceHistory: [
+          PriceHistoryEntry(
+            timestamp: initialTime,
+            price: 24.99,
+            costPrice: 15.00,
+            marginPercent: 66.6,
+          ),
+        ],
+      );
+
+      // Price updated
+      final updated = item.copyWith(price: 29.99);
+      expect(updated.price, 29.99);
+      expect(updated.costPrice, 15.00);
+      expect(updated.priceLastUpdated.isAfter(initialTime), isTrue);
+      expect(updated.lastUpdated.isAfter(initialTime), isTrue);
+      expect(updated.priceHistory.length, 2);
+      expect(updated.priceHistory.last.price, 29.99);
+      expect(updated.priceHistory.last.costPrice, 15.00);
+    });
+
+    test('copyWith auto-detects quantity changes and updates stockLastUpdated', () {
+      final initialTime = DateTime(2026, 1, 1, 10, 0);
+      final item = InventoryItem(
+        id: 'item_stock',
+        name: 'Energy Drink 250ml',
+        sku: 'BEV-EN-01',
+        category: 'Groceries',
+        price: 3.50,
+        costPrice: 1.50,
+        quantity: 100,
+        minThreshold: 10,
+        createdAt: initialTime,
+        lastUpdated: initialTime,
+        priceLastUpdated: initialTime,
+        stockLastUpdated: initialTime,
+      );
+
+      final updated = item.copyWith(quantity: 85);
+      expect(updated.quantity, 85);
+      expect(updated.stockLastUpdated.isAfter(initialTime), isTrue);
+      expect(updated.lastUpdated.isAfter(initialTime), isTrue);
+      // Price was not modified, so priceLastUpdated stays unchanged
+      expect(updated.priceLastUpdated, initialTime);
+    });
+
+    test('MockDataRepository items have realistic historical price entries and timestamps', () {
+      final items = MockDataRepository.getInitialInventory();
+      expect(items.isNotEmpty, isTrue);
+
+      for (final item in items) {
+        expect(item.createdAt, isNotNull);
+        expect(item.lastUpdated, isNotNull);
+        expect(item.priceLastUpdated, isNotNull);
+        expect(item.stockLastUpdated, isNotNull);
+        expect(item.priceHistory.isNotEmpty, isTrue);
+        expect(item.priceHistory.last.price, item.price);
+        expect(item.priceHistory.last.costPrice, item.costPrice);
+      }
     });
   });
 }

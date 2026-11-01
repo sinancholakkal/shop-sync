@@ -63,9 +63,33 @@ class MockDataRepository {
         category: 'Electronics',
         price: 199.99,
         costPrice: 120.00,
+        marginPercent: 66.6,
         quantity: 24,
         minThreshold: 10,
+        createdAt: now.subtract(const Duration(days: 30)),
+        priceLastUpdated: now.subtract(const Duration(days: 3)),
+        stockLastUpdated: now.subtract(const Duration(hours: 3)),
         lastUpdated: now.subtract(const Duration(hours: 3)),
+        priceHistory: [
+          PriceHistoryEntry(
+            timestamp: now.subtract(const Duration(days: 30)),
+            price: 179.99,
+            costPrice: 110.00,
+            note: 'Product Launch',
+          ),
+          PriceHistoryEntry(
+            timestamp: now.subtract(const Duration(days: 15)),
+            price: 189.99,
+            costPrice: 115.00,
+            note: 'Supplier Price Adjustment',
+          ),
+          PriceHistoryEntry(
+            timestamp: now.subtract(const Duration(days: 3)),
+            price: 199.99,
+            costPrice: 120.00,
+            note: 'Holiday Season Revision',
+          ),
+        ],
       ),
       InventoryItem(
         id: 'inv_02',
@@ -74,9 +98,27 @@ class MockDataRepository {
         category: 'Accessories',
         price: 49.50,
         costPrice: 22.00,
+        marginPercent: 125.0,
         quantity: 6, // Low stock!
         minThreshold: 15,
+        createdAt: now.subtract(const Duration(days: 20)),
+        priceLastUpdated: now.subtract(const Duration(hours: 5)),
+        stockLastUpdated: now.subtract(const Duration(hours: 5)),
         lastUpdated: now.subtract(const Duration(hours: 5)),
+        priceHistory: [
+          PriceHistoryEntry(
+            timestamp: now.subtract(const Duration(days: 20)),
+            price: 42.00,
+            costPrice: 20.00,
+            note: 'Initial Stock',
+          ),
+          PriceHistoryEntry(
+            timestamp: now.subtract(const Duration(hours: 5)),
+            price: 49.50,
+            costPrice: 22.00,
+            note: 'Current Market Markup',
+          ),
+        ],
       ),
       InventoryItem(
         id: 'inv_03',
@@ -85,9 +127,33 @@ class MockDataRepository {
         category: 'Electronics',
         price: 129.00,
         costPrice: 75.00,
+        marginPercent: 72.0,
         quantity: 18,
         minThreshold: 8,
+        createdAt: now.subtract(const Duration(days: 45)),
+        priceLastUpdated: now.subtract(const Duration(days: 1)),
+        stockLastUpdated: now.subtract(const Duration(days: 1)),
         lastUpdated: now.subtract(const Duration(days: 1)),
+        priceHistory: [
+          PriceHistoryEntry(
+            timestamp: now.subtract(const Duration(days: 45)),
+            price: 149.00,
+            costPrice: 85.00,
+            note: 'Initial Price',
+          ),
+          PriceHistoryEntry(
+            timestamp: now.subtract(const Duration(days: 20)),
+            price: 135.00,
+            costPrice: 80.00,
+            note: 'Flash Sale Discount',
+          ),
+          PriceHistoryEntry(
+            timestamp: now.subtract(const Duration(days: 1)),
+            price: 129.00,
+            costPrice: 75.00,
+            note: 'Cost Reduction Passed to Customers',
+          ),
+        ],
       ),
       InventoryItem(
         id: 'inv_04',
@@ -96,9 +162,27 @@ class MockDataRepository {
         category: 'Electronics',
         price: 59.99,
         costPrice: 30.00,
+        marginPercent: 100.0,
         quantity: 3, // Very low stock!
         minThreshold: 12,
+        createdAt: now.subtract(const Duration(days: 15)),
+        priceLastUpdated: now.subtract(const Duration(hours: 12)),
+        stockLastUpdated: now.subtract(const Duration(hours: 12)),
         lastUpdated: now.subtract(const Duration(hours: 12)),
+        priceHistory: [
+          PriceHistoryEntry(
+            timestamp: now.subtract(const Duration(days: 15)),
+            price: 54.99,
+            costPrice: 28.00,
+            note: 'Initial Stocking',
+          ),
+          PriceHistoryEntry(
+            timestamp: now.subtract(const Duration(hours: 12)),
+            price: 59.99,
+            costPrice: 30.00,
+            note: 'Price Adjustment',
+          ),
+        ],
       ),
       InventoryItem(
         id: 'inv_05',
@@ -107,9 +191,27 @@ class MockDataRepository {
         category: 'Accessories',
         price: 24.99,
         costPrice: 8.50,
+        marginPercent: 194.0,
         quantity: 45,
         minThreshold: 20,
+        createdAt: now.subtract(const Duration(days: 60)),
+        priceLastUpdated: now.subtract(const Duration(days: 2)),
+        stockLastUpdated: now.subtract(const Duration(days: 2)),
         lastUpdated: now.subtract(const Duration(days: 2)),
+        priceHistory: [
+          PriceHistoryEntry(
+            timestamp: now.subtract(const Duration(days: 60)),
+            price: 22.00,
+            costPrice: 8.00,
+            note: 'Wholesale Intake',
+          ),
+          PriceHistoryEntry(
+            timestamp: now.subtract(const Duration(days: 2)),
+            price: 24.99,
+            costPrice: 8.50,
+            note: 'Freight Surcharge Revision',
+          ),
+        ],
       ),
       InventoryItem(
         id: 'inv_06',
@@ -118,9 +220,27 @@ class MockDataRepository {
         category: 'Accessories',
         price: 39.00,
         costPrice: 18.00,
+        marginPercent: 116.6,
         quantity: 0, // Out of stock!
         minThreshold: 5,
+        createdAt: now.subtract(const Duration(days: 25)),
+        priceLastUpdated: now.subtract(const Duration(days: 3)),
+        stockLastUpdated: now.subtract(const Duration(days: 3)),
         lastUpdated: now.subtract(const Duration(days: 3)),
+        priceHistory: [
+          PriceHistoryEntry(
+            timestamp: now.subtract(const Duration(days: 25)),
+            price: 35.00,
+            costPrice: 16.00,
+            note: 'Catalog Introduction',
+          ),
+          PriceHistoryEntry(
+            timestamp: now.subtract(const Duration(days: 3)),
+            price: 39.00,
+            costPrice: 18.00,
+            note: 'Import Duty Adjustment',
+          ),
+        ],
       ),
       InventoryItem(
         id: 'inv_07',
@@ -129,9 +249,33 @@ class MockDataRepository {
         category: 'Electronics',
         price: 89.99,
         costPrice: 48.00,
+        marginPercent: 87.5,
         quantity: 14,
         minThreshold: 6,
+        createdAt: now.subtract(const Duration(days: 35)),
+        priceLastUpdated: now.subtract(const Duration(hours: 8)),
+        stockLastUpdated: now.subtract(const Duration(hours: 8)),
         lastUpdated: now.subtract(const Duration(hours: 8)),
+        priceHistory: [
+          PriceHistoryEntry(
+            timestamp: now.subtract(const Duration(days: 35)),
+            price: 99.99,
+            costPrice: 55.00,
+            note: 'Launch Price',
+          ),
+          PriceHistoryEntry(
+            timestamp: now.subtract(const Duration(days: 12)),
+            price: 94.99,
+            costPrice: 50.00,
+            note: 'Competitive Repricing',
+          ),
+          PriceHistoryEntry(
+            timestamp: now.subtract(const Duration(hours: 8)),
+            price: 89.99,
+            costPrice: 48.00,
+            note: 'Bulk Discount Intake',
+          ),
+        ],
       ),
     ];
   }
