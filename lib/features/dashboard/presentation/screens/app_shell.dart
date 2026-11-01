@@ -1007,7 +1007,8 @@ class _AppShellState extends State<AppShell> {
                 ),
 
                 // Mobile Floating Liquid Glass Pill Navigation Bar (Instagram-style shrink on scroll)
-                if (context.isMobile)
+                // Automatically hidden when keyboard is open to prevent covering search/inputs
+                if (context.isMobile && MediaQuery.of(context).viewInsets.bottom == 0)
                   Positioned(
                     left: 0,
                     right: 0,

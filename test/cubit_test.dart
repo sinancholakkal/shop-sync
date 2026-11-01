@@ -1221,7 +1221,7 @@ void main() {
     test('InventoryItem itemNumber and searchKeywords serialization & copyWith', () {
       final item = InventoryItem(
         id: 'inv_test_item',
-        name: 'Stainless Steel Tea Strainer (സ്ട്രൈനർ)',
+        name: 'Stainless Steel Tea Strainer',
         sku: 'KIT-STR-01',
         category: 'Kitchenware',
         price: 15.00,
@@ -1230,32 +1230,32 @@ void main() {
         quantity: 30,
         minThreshold: 5,
         itemNumber: 8,
-        searchKeywords: ['ചായയരിപ്പ', 'ടീ സ്ട്രൈനർ', 'Strainer', 'Tea Filter'],
+        searchKeywords: ['Mesh Filter', 'Sieve', 'Strainer', 'Tea Filter'],
         lastUpdated: DateTime.now(),
       );
 
       expect(item.itemNumber, 8);
-      expect(item.searchKeywords, contains('ചായയരിപ്പ'));
+      expect(item.searchKeywords, contains('Mesh Filter'));
       expect(item.searchKeywords.length, 4);
 
       // toMap serialization
       final map = item.toMap();
       expect(map['itemNumber'], 8);
       expect(map['searchKeywords'], isA<List>());
-      expect((map['searchKeywords'] as List).contains('ചായയരിപ്പ'), isTrue);
+      expect((map['searchKeywords'] as List).contains('Mesh Filter'), isTrue);
 
       // fromMap deserialization
       final restored = InventoryItem.fromMap(map, 'inv_test_item');
       expect(restored.itemNumber, 8);
-      expect(restored.searchKeywords, equals(['ചായയരിപ്പ', 'ടീ സ്ട്രൈനർ', 'Strainer', 'Tea Filter']));
+      expect(restored.searchKeywords, equals(['Mesh Filter', 'Sieve', 'Strainer', 'Tea Filter']));
 
       // copyWith
       final updated = item.copyWith(
         itemNumber: 9,
-        searchKeywords: ['ചായയരിപ്പ', 'Arippa'],
+        searchKeywords: ['Mesh Filter', 'Infuser'],
       );
       expect(updated.itemNumber, 9);
-      expect(updated.searchKeywords, equals(['ചായയരിപ്പ', 'Arippa']));
+      expect(updated.searchKeywords, equals(['Mesh Filter', 'Infuser']));
     });
 
     test('AppStateProvider nextItemNumber calculation and auto-increment on add', () {
@@ -1328,19 +1328,19 @@ void main() {
       await tester.enterText(find.widgetWithText(TextField, 'e.g. PER-MK-104'), 'STR-PRO-99');
       await tester.enterText(find.widgetWithText(TextField, '0.00').first, '10.00'); // Cost price
 
-      // Add keyword: "ചായയരിപ്പ"
-      final keywordField = find.widgetWithText(TextField, 'Type keyword (e.g. ചായയരിപ്പ) & tap +');
+      // Add keyword: "Sieve"
+      final keywordField = find.widgetWithText(TextField, 'Type keyword (e.g. Sieve) & tap +');
       expect(keywordField, findsOneWidget);
-      await tester.enterText(keywordField, 'ചായയരിപ്പ');
-      await tester.tap(find.byTooltip('Add Keyword / ചേർക്കുക'));
+      await tester.enterText(keywordField, 'Sieve');
+      await tester.tap(find.byTooltip('Add Keyword'));
       await tester.pumpAndSettle();
 
-      // Chip for "ചായയരിപ്പ" should appear
-      expect(find.text('ചായയരിപ്പ'), findsOneWidget);
+      // Chip for "Sieve" should appear
+      expect(find.text('Sieve'), findsOneWidget);
 
       // Add another keyword: "Strainer"
       await tester.enterText(keywordField, 'Strainer');
-      await tester.tap(find.byTooltip('Add Keyword / ചേർക്കുക'));
+      await tester.tap(find.byTooltip('Add Keyword'));
       await tester.pumpAndSettle();
       expect(find.text('Strainer'), findsOneWidget);
 
@@ -1352,7 +1352,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(saved, isNotNull);
-      expect(saved!.searchKeywords, contains('ചായയരിപ്പ'));
+      expect(saved!.searchKeywords, contains('Sieve'));
       expect(saved!.searchKeywords, contains('Strainer'));
       expect(saved!.itemNumber, greaterThanOrEqualTo(1));
     });

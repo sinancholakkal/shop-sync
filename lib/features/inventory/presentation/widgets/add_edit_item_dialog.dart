@@ -692,14 +692,14 @@ class _AddEditItemDialogState extends State<AddEditItemDialog> {
                     ),
                     const SizedBox(width: 6),
                     Tooltip(
-                      message: 'Add regional or alternative names (e.g. "ചായയരിപ്പ", "Strainer") so staff & customers can find this item instantly in search.',
+                      message: 'Add alternative names or keywords (e.g. "Sieve", "Filter") so staff can find this item quickly in search.',
                       child: Icon(Icons.info_outline_rounded, size: 15, color: isDark ? Colors.white60 : Colors.black45),
                     ),
                   ],
                 ),
                 const SizedBox(height: 3),
                 Text(
-                  'Alternative search keywords (e.g., ചായയരിപ്പ, ടീ സ്ട്രൈനർ, Strainer).',
+                  'Alternative search keywords or aliases (e.g. Filter, Mesh, Sieve).',
                   style: GoogleFonts.outfit(fontSize: 11, color: isDark ? Colors.white60 : Colors.black45),
                 ),
                 const SizedBox(height: 8),
@@ -711,11 +711,11 @@ class _AddEditItemDialogState extends State<AddEditItemDialog> {
                         onSubmitted: (_) => _addSearchKeyword(),
                         textInputAction: TextInputAction.done,
                         decoration: InputDecoration(
-                          hintText: 'Type keyword (e.g. ചായയരിപ്പ) & tap +',
+                          hintText: 'Type keyword (e.g. Sieve) & tap +',
                           prefixIcon: const Icon(Icons.tag_rounded, size: 18),
                           suffixIcon: IconButton(
                             icon: const Icon(Icons.add_circle_rounded, color: AppColors.primaryLight),
-                            tooltip: 'Add Keyword / ചേർക്കുക',
+                            tooltip: 'Add Keyword',
                             onPressed: _addSearchKeyword,
                           ),
                           contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),

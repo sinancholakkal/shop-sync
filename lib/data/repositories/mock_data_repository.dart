@@ -368,7 +368,7 @@ class MockDataRepository {
       ),
       InventoryItem(
         id: 'inv_08',
-        name: 'Stainless Steel Tea Strainer (സ്ട്രൈനർ)',
+        name: 'Stainless Steel Tea Strainer',
         sku: 'KIT-STR-008',
         category: 'Groceries',
         price: 9.99,
@@ -383,7 +383,7 @@ class MockDataRepository {
         stockLastUpdated: now.subtract(const Duration(days: 1)),
         lastUpdated: now.subtract(const Duration(days: 1)),
         itemNumber: 8,
-        searchKeywords: ['ചായയരിപ്പ', 'ടീ സ്ട്രൈനർ', 'Strainer', 'Tea Filter', 'Arippa'],
+        searchKeywords: ['Tea Strainer', 'Filter', 'Mesh Sieve', 'Infuser', 'Strainer'],
         priceHistory: [
           PriceHistoryEntry(
             timestamp: now.subtract(const Duration(days: 10)),

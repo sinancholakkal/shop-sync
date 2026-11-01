@@ -1,3 +1,4 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
@@ -21,6 +22,34 @@ class InventoryScreen extends StatefulWidget {
 class _InventoryScreenState extends State<InventoryScreen> {
   String _searchQuery = '';
   String _selectedCategory = 'All';
+  late final TextEditingController _searchController;
+  late final FocusNode _searchFocusNode;
+  late final ScrollController _scrollController;
+
+  @override
+  void initState() {
+    super.initState();
+    _searchController = TextEditingController();
+    _searchFocusNode = FocusNode();
+    _scrollController = ScrollController();
+    _searchFocusNode.addListener(() {
+      if (_searchFocusNode.hasFocus && _scrollController.hasClients) {
+        _scrollController.animateTo(
+          55.0,
+          duration: const Duration(milliseconds: 250),
+          curve: Curves.easeOut,
+        );
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    _searchFocusNode.dispose();
+    _scrollController.dispose();
+    super.dispose();
+  }
 
   Future<void> _showAddCategoryDialog(BuildContext context, AppStateProvider appState) async {
     if (!appState.canManageCategories) {
@@ -247,6 +276,16 @@ class _InventoryScreenState extends State<InventoryScreen> {
       return item.category == _selectedCategory;
     }).toList();
 
+    final isMobile = context.isMobile;
+    final stickyHeight = isMobile ? 98.0 : 110.0;
+
+    final filterCats = <String>[
+      'All',
+      'Low Stock',
+      'No Item (Out of Stock)',
+      ...appState.allProductCategories,
+    ];
+
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: SafeArea(
@@ -256,324 +295,375 @@ class _InventoryScreenState extends State<InventoryScreen> {
           backgroundColor: isDark ? const Color(0xFF1E293B) : Colors.white,
           onRefresh: () => appState.refreshAllData(),
           child: CustomScrollView(
+            controller: _scrollController,
             physics: const AlwaysScrollableScrollPhysics(),
             slivers: [
-            // Header Bar
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.all(24.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Inventory & Stock',
-                                style: GoogleFonts.outfit(
-                                  fontSize: 24,
-                                  fontWeight: FontWeight.bold,
-                                  color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
+              // Header Bar (Title & Add Product & Permission Banner)
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: isMobile
+                      ? const EdgeInsets.fromLTRB(16, 12, 16, 4)
+                      : const EdgeInsets.fromLTRB(24, 20, 24, 8),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Inventory & Stock',
+                                  style: GoogleFonts.outfit(
+                                    fontSize: isMobile ? 20 : 24,
+                                    fontWeight: FontWeight.bold,
+                                    color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
+                                  ),
                                 ),
+                                if (!isMobile || (_searchQuery.isEmpty && !_searchFocusNode.hasFocus)) ...[
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    'Track item quantities, unit prices, and replenishment alerts',
+                                    style: GoogleFonts.outfit(
+                                      fontSize: 12,
+                                      color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
+                          if (canAddEdit) ...[
+                            const SizedBox(width: 8),
+                            GlowingGlassButton(
+                              padding: isMobile
+                                  ? const EdgeInsets.symmetric(horizontal: 14, vertical: 8)
+                                  : const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+                              onPressed: () {
+                                AddEditItemDialog.show(
+                                  context,
+                                  onSave: (newItem) {
+                                    appState.addInventoryItem(newItem);
+                                  },
+                                );
+                              },
+                              child: Row(
+                                children: [
+                                  Icon(Icons.add_circle_outline_rounded,
+                                      color: Colors.white, size: isMobile ? 16 : 18),
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    isMobile ? 'Add' : 'Add Product',
+                                    style: GoogleFonts.outfit(
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.white,
+                                      fontSize: isMobile ? 13 : 14,
+                                    ),
+                                  ),
+                                ],
                               ),
-                              const SizedBox(height: 4),
-                              Text(
-                                'Track item quantities, unit prices, and replenishment alerts',
-                                style: GoogleFonts.outfit(
-                                  fontSize: 13,
-                                  color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
+                            ),
+                          ],
+                        ],
+                      ),
+
+                      // Permission Banner for Staff
+                      if (!isOwner) ...[
+                        const SizedBox(height: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: canAddEdit
+                                ? AppColors.accentPurple.withValues(alpha: 0.15)
+                                : (canCount
+                                    ? AppColors.primaryLight.withValues(alpha: 0.15)
+                                    : AppColors.secondary.withValues(alpha: 0.15)),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: canAddEdit
+                                  ? AppColors.accentPurple.withValues(alpha: 0.3)
+                                  : (canCount
+                                      ? AppColors.primaryLight.withValues(alpha: 0.3)
+                                      : AppColors.secondary.withValues(alpha: 0.3)),
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(
+                                canAddEdit
+                                    ? Icons.security_rounded
+                                    : (canCount ? Icons.inventory_2_rounded : Icons.lock_outline_rounded),
+                                size: 16,
+                                color: canAddEdit
+                                    ? AppColors.accentPurple
+                                    : (canCount ? AppColors.primaryLight : AppColors.secondary),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  'Role: ${permission.title} - ${permission.description}',
+                                  style: GoogleFonts.outfit(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
                                 ),
                               ),
                             ],
                           ),
                         ),
-                        if (canAddEdit) ...[
-                          const SizedBox(width: 12),
-                          GlowingGlassButton(
-                            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
-                            onPressed: () {
-                              AddEditItemDialog.show(
-                                context,
-                                onSave: (newItem) {
-                                  appState.addInventoryItem(newItem);
-                                },
-                              );
-                            },
-                            child: Row(
-                              children: [
-                                const Icon(Icons.add_circle_outline_rounded, color: Colors.white, size: 18),
-                                const SizedBox(width: 8),
-                                Text(
-                                  'Add Product',
-                                  style: GoogleFonts.outfit(
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.white,
-                                    fontSize: 14,
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+
+              // Pinned / Sticky Search & Filter Header (Always visible even on mobile when keyboard opens)
+              SliverPersistentHeader(
+                pinned: true,
+                delegate: _StickySearchFilterDelegate(
+                  height: stickyHeight,
+                  child: ClipRect(
+                    child: BackdropFilter(
+                      filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+                      child: Container(
+                        color: (isDark ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC)).withValues(alpha: 0.94),
+                        padding: isMobile
+                            ? const EdgeInsets.fromLTRB(16, 4, 16, 6)
+                            : const EdgeInsets.fromLTRB(24, 6, 24, 8),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            // Search & Filters Row
+                            SizedBox(
+                              height: isMobile ? 42 : 46,
+                              child: TextField(
+                                controller: _searchController,
+                                focusNode: _searchFocusNode,
+                                onChanged: (val) => setState(() => _searchQuery = val),
+                                decoration: InputDecoration(
+                                  isDense: true,
+                                  hintText: isMobile
+                                      ? 'Search name, #code, SKU, keywords...'
+                                      : 'Search by product name, #item code, SKU, or keywords...',
+                                  prefixIcon: const Icon(Icons.search_rounded, size: 20),
+                                  suffixIcon: _searchQuery.isNotEmpty
+                                      ? IconButton(
+                                          icon: const Icon(Icons.cancel_rounded, size: 18),
+                                          tooltip: 'Clear search',
+                                          onPressed: () {
+                                            _searchController.clear();
+                                            setState(() => _searchQuery = '');
+                                          },
+                                        )
+                                      : null,
+                                  contentPadding: EdgeInsets.symmetric(
+                                    horizontal: 14,
+                                    vertical: isMobile ? 10 : 12,
                                   ),
                                 ),
-                              ],
+                              ),
                             ),
-                          ),
-                        ],
-                      ],
-                    ),
+                            SizedBox(height: isMobile ? 6 : 8),
 
-                    // Permission Banner for Staff
-                    if (!isOwner) ...[
-                      const SizedBox(height: 16),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                        decoration: BoxDecoration(
-                          color: canAddEdit
-                              ? AppColors.accentPurple.withValues(alpha: 0.15)
-                              : (canCount
-                                  ? AppColors.primaryLight.withValues(alpha: 0.15)
-                                  : AppColors.secondary.withValues(alpha: 0.15)),
-                          borderRadius: BorderRadius.circular(14),
-                          border: Border.all(
-                            color: canAddEdit
-                                ? AppColors.accentPurple.withValues(alpha: 0.3)
-                                : (canCount
-                                    ? AppColors.primaryLight.withValues(alpha: 0.3)
-                                    : AppColors.secondary.withValues(alpha: 0.3)),
-                          ),
-                        ),
-                        child: Row(
-                          children: [
-                            Icon(
-                              canAddEdit
-                                  ? Icons.security_rounded
-                                  : (canCount ? Icons.inventory_2_rounded : Icons.lock_outline_rounded),
-                              size: 18,
-                              color: canAddEdit
-                                  ? AppColors.accentPurple
-                                  : (canCount ? AppColors.primaryLight : AppColors.secondary),
-                            ),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: Text(
-                                'Role Permission: ${permission.title} - ${permission.description}',
-                                style: GoogleFonts.outfit(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w500,
+                            // Category chips horizontal scroll
+                            SizedBox(
+                              height: isMobile ? 36 : 38,
+                              child: SingleChildScrollView(
+                                scrollDirection: Axis.horizontal,
+                                child: Row(
+                                  children: [
+                                    ...filterCats.map((cat) {
+                                      final isSelected = _selectedCategory == cat;
+
+                                      Color selectedColor = AppColors.primary;
+                                      Color? badgeColor;
+                                      IconData? chipIcon;
+                                      String? countBadge;
+
+                                      if (cat == 'Low Stock') {
+                                        chipIcon = Icons.warning_amber_rounded;
+                                        selectedColor = AppColors.accentAmber;
+                                        if (appState.lowStockItemCount > 0) {
+                                          countBadge = '${appState.lowStockItemCount}';
+                                          badgeColor = AppColors.accentAmber;
+                                        }
+                                      } else if (cat == 'No Item (Out of Stock)') {
+                                        chipIcon = Icons.remove_circle_outline_rounded;
+                                        selectedColor = AppColors.accentRose;
+                                        if (appState.outOfStockItemCount > 0) {
+                                          countBadge = '${appState.outOfStockItemCount}';
+                                          badgeColor = AppColors.accentRose;
+                                        }
+                                      } else if (cat == 'All') {
+                                        selectedColor = AppColors.primary;
+                                        if (appState.inventoryList.isNotEmpty) {
+                                          countBadge = '${appState.inventoryList.length}';
+                                        }
+                                      }
+
+                                      return Padding(
+                                        padding: const EdgeInsets.only(right: 8.0),
+                                        child: FilterChip(
+                                          avatar: chipIcon != null
+                                              ? Icon(
+                                                  chipIcon,
+                                                  size: 16,
+                                                  color: isSelected
+                                                      ? Colors.white
+                                                      : (cat == 'No Item (Out of Stock)'
+                                                          ? AppColors.accentRose
+                                                          : (cat == 'Low Stock'
+                                                              ? AppColors.accentAmber
+                                                              : (isDark ? Colors.white70 : Colors.black54))),
+                                                )
+                                              : null,
+                                          label: Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Text(
+                                                cat,
+                                                style: GoogleFonts.outfit(
+                                                  fontSize: 13,
+                                                  fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                                                  color: isSelected
+                                                      ? Colors.white
+                                                      : (isDark ? Colors.white70 : Colors.black87),
+                                                ),
+                                              ),
+                                              if (countBadge != null) ...[
+                                                const SizedBox(width: 6),
+                                                Container(
+                                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+                                                  decoration: BoxDecoration(
+                                                    color: isSelected
+                                                        ? Colors.white.withValues(alpha: 0.25)
+                                                        : (badgeColor ?? (isDark ? Colors.white12 : Colors.black12)).withValues(alpha: 0.2),
+                                                    borderRadius: BorderRadius.circular(10),
+                                                  ),
+                                                  child: Text(
+                                                    countBadge,
+                                                    style: GoogleFonts.outfit(
+                                                      fontSize: 11,
+                                                      fontWeight: FontWeight.bold,
+                                                      color: isSelected
+                                                          ? Colors.white
+                                                          : (badgeColor ?? (isDark ? Colors.white70 : Colors.black87)),
+                                                    ),
+                                                  ),
+                                                ),
+                                              ],
+                                            ],
+                                          ),
+                                          selected: isSelected,
+                                          onSelected: (_) {
+                                            setState(() => _selectedCategory = cat);
+                                            appState.setInventoryFilterCategory(cat);
+                                          },
+                                          backgroundColor: isDark
+                                              ? Colors.white.withValues(alpha: 0.05)
+                                              : Colors.black.withValues(alpha: 0.04),
+                                          selectedColor: selectedColor,
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius: BorderRadius.circular(12),
+                                            side: BorderSide(
+                                              color: isSelected
+                                                  ? selectedColor
+                                                  : (isDark ? AppColors.darkGlassBorder : AppColors.lightGlassBorder),
+                                            ),
+                                          ),
+                                          showCheckmark: false,
+                                          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                        ),
+                                      );
+                                    }),
+                                    if (appState.canManageCategories) ...[
+                                      if (!appState.isCategoryLimitReached)
+                                        Padding(
+                                          padding: const EdgeInsets.only(right: 8.0),
+                                          child: ActionChip(
+                                            avatar: const Icon(
+                                              Icons.add_circle_outline_rounded,
+                                              size: 16,
+                                              color: AppColors.primaryLight,
+                                            ),
+                                            label: Text(
+                                              'Add Category',
+                                              style: GoogleFonts.outfit(
+                                                fontSize: 13,
+                                                fontWeight: FontWeight.w600,
+                                                color: AppColors.primaryLight,
+                                              ),
+                                            ),
+                                            backgroundColor: AppColors.primary.withValues(alpha: 0.12),
+                                            side: BorderSide(
+                                              color: AppColors.primaryLight.withValues(alpha: 0.35),
+                                            ),
+                                            shape: RoundedRectangleBorder(
+                                              borderRadius: BorderRadius.circular(12),
+                                            ),
+                                            onPressed: () => _showAddCategoryDialog(context, appState),
+                                            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                          ),
+                                        ),
+                                      Padding(
+                                        padding: const EdgeInsets.only(right: 8.0),
+                                        child: ActionChip(
+                                          avatar: Icon(
+                                            appState.isCategoryLimitReached
+                                                ? Icons.tune_rounded
+                                                : Icons.edit_note_rounded,
+                                            size: 16,
+                                            color: appState.isCategoryLimitReached
+                                                ? AppColors.accentAmber
+                                                : AppColors.accentEmerald,
+                                          ),
+                                          label: Text(
+                                            'Manage (${appState.allProductCategories.length}/${appState.maxCategories})',
+                                            style: GoogleFonts.outfit(
+                                              fontSize: 13,
+                                              fontWeight: FontWeight.w600,
+                                              color: appState.isCategoryLimitReached
+                                                  ? AppColors.accentAmber
+                                                  : AppColors.accentEmerald,
+                                            ),
+                                          ),
+                                          backgroundColor: (appState.isCategoryLimitReached
+                                                  ? AppColors.accentAmber
+                                                  : AppColors.accentEmerald)
+                                              .withValues(alpha: 0.12),
+                                          side: BorderSide(
+                                            color: (appState.isCategoryLimitReached
+                                                    ? AppColors.accentAmber
+                                                    : AppColors.accentEmerald)
+                                                .withValues(alpha: 0.35),
+                                          ),
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius: BorderRadius.circular(12),
+                                          ),
+                                          onPressed: () => CategoryManagerModal.show(context),
+                                          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                        ),
+                                      ),
+                                    ],
+                                  ],
                                 ),
                               ),
                             ),
                           ],
                         ),
                       ),
-                    ],
-
-                    const SizedBox(height: 20),
-
-                    // Search & Filters Row
-                    TextField(
-                      onChanged: (val) => setState(() => _searchQuery = val),
-                      decoration: const InputDecoration(
-                        hintText: 'Search by name, #item code, SKU, or keywords (e.g. ചായയരിപ്പ)...',
-                        prefixIcon: Icon(Icons.search_rounded),
-                      ),
                     ),
-                    const SizedBox(height: 16),
-
-                    // Category chips
-                    Builder(
-                      builder: (context) {
-                        final filterCats = <String>[
-                          'All',
-                          'Low Stock',
-                          'No Item (Out of Stock)',
-                          ...appState.allProductCategories,
-                        ];
-
-                        return SingleChildScrollView(
-                          scrollDirection: Axis.horizontal,
-                          child: Row(
-                            children: [
-                              ...filterCats.map((cat) {
-                                final isSelected = _selectedCategory == cat;
-
-                                Color selectedColor = AppColors.primary;
-                                Color? badgeColor;
-                                IconData? chipIcon;
-                                String? countBadge;
-
-                                if (cat == 'Low Stock') {
-                                  chipIcon = Icons.warning_amber_rounded;
-                                  selectedColor = AppColors.accentAmber;
-                                  if (appState.lowStockItemCount > 0) {
-                                    countBadge = '${appState.lowStockItemCount}';
-                                    badgeColor = AppColors.accentAmber;
-                                  }
-                                } else if (cat == 'No Item (Out of Stock)') {
-                                  chipIcon = Icons.remove_circle_outline_rounded;
-                                  selectedColor = AppColors.accentRose;
-                                  if (appState.outOfStockItemCount > 0) {
-                                    countBadge = '${appState.outOfStockItemCount}';
-                                    badgeColor = AppColors.accentRose;
-                                  }
-                                } else if (cat == 'All') {
-                                  selectedColor = AppColors.primary;
-                                  if (appState.inventoryList.isNotEmpty) {
-                                    countBadge = '${appState.inventoryList.length}';
-                                  }
-                                }
-
-                                return Padding(
-                                  padding: const EdgeInsets.only(right: 8.0),
-                                  child: FilterChip(
-                                    avatar: chipIcon != null
-                                        ? Icon(
-                                            chipIcon,
-                                            size: 16,
-                                            color: isSelected
-                                                ? Colors.white
-                                                : (cat == 'No Item (Out of Stock)'
-                                                    ? AppColors.accentRose
-                                                    : (cat == 'Low Stock'
-                                                        ? AppColors.accentAmber
-                                                        : (isDark ? Colors.white70 : Colors.black54))),
-                                          )
-                                        : null,
-                                    label: Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        Text(
-                                          cat,
-                                          style: GoogleFonts.outfit(
-                                            fontSize: 13,
-                                            fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-                                            color: isSelected
-                                                ? Colors.white
-                                                : (isDark ? Colors.white70 : Colors.black87),
-                                          ),
-                                        ),
-                                        if (countBadge != null) ...[
-                                          const SizedBox(width: 6),
-                                          Container(
-                                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
-                                            decoration: BoxDecoration(
-                                              color: isSelected
-                                                  ? Colors.white.withValues(alpha: 0.25)
-                                                  : (badgeColor ?? (isDark ? Colors.white12 : Colors.black12)).withValues(alpha: 0.2),
-                                              borderRadius: BorderRadius.circular(10),
-                                            ),
-                                            child: Text(
-                                              countBadge,
-                                              style: GoogleFonts.outfit(
-                                                fontSize: 11,
-                                                fontWeight: FontWeight.bold,
-                                                color: isSelected
-                                                    ? Colors.white
-                                                    : (badgeColor ?? (isDark ? Colors.white70 : Colors.black87)),
-                                              ),
-                                            ),
-                                          ),
-                                        ],
-                                      ],
-                                    ),
-                                    selected: isSelected,
-                                    onSelected: (_) {
-                                      setState(() => _selectedCategory = cat);
-                                      appState.setInventoryFilterCategory(cat);
-                                    },
-                                    backgroundColor: isDark
-                                        ? Colors.white.withValues(alpha: 0.05)
-                                        : Colors.black.withValues(alpha: 0.04),
-                                    selectedColor: selectedColor,
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(12),
-                                      side: BorderSide(
-                                        color: isSelected
-                                            ? selectedColor
-                                            : (isDark ? AppColors.darkGlassBorder : AppColors.lightGlassBorder),
-                                      ),
-                                    ),
-                                    showCheckmark: false,
-                                  ),
-                                );
-                              }),
-                              if (appState.canManageCategories) ...[
-                                if (!appState.isCategoryLimitReached)
-                                  Padding(
-                                    padding: const EdgeInsets.only(right: 8.0),
-                                    child: ActionChip(
-                                      avatar: const Icon(
-                                        Icons.add_circle_outline_rounded,
-                                        size: 16,
-                                        color: AppColors.primaryLight,
-                                      ),
-                                      label: Text(
-                                        'Add Category',
-                                        style: GoogleFonts.outfit(
-                                          fontSize: 13,
-                                          fontWeight: FontWeight.w600,
-                                          color: AppColors.primaryLight,
-                                        ),
-                                      ),
-                                      backgroundColor: AppColors.primary.withValues(alpha: 0.12),
-                                      side: BorderSide(
-                                        color: AppColors.primaryLight.withValues(alpha: 0.35),
-                                      ),
-                                      shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(12),
-                                      ),
-                                      onPressed: () => _showAddCategoryDialog(context, appState),
-                                    ),
-                                  ),
-                                Padding(
-                                  padding: const EdgeInsets.only(right: 8.0),
-                                  child: ActionChip(
-                                    avatar: Icon(
-                                      appState.isCategoryLimitReached
-                                          ? Icons.tune_rounded
-                                          : Icons.edit_note_rounded,
-                                      size: 16,
-                                      color: appState.isCategoryLimitReached
-                                          ? AppColors.accentAmber
-                                          : AppColors.accentEmerald,
-                                    ),
-                                    label: Text(
-                                      'Manage (${appState.allProductCategories.length}/${appState.maxCategories})',
-                                      style: GoogleFonts.outfit(
-                                        fontSize: 13,
-                                        fontWeight: FontWeight.w600,
-                                        color: appState.isCategoryLimitReached
-                                            ? AppColors.accentAmber
-                                            : AppColors.accentEmerald,
-                                      ),
-                                    ),
-                                    backgroundColor: (appState.isCategoryLimitReached
-                                            ? AppColors.accentAmber
-                                            : AppColors.accentEmerald)
-                                        .withValues(alpha: 0.12),
-                                    side: BorderSide(
-                                      color: (appState.isCategoryLimitReached
-                                              ? AppColors.accentAmber
-                                              : AppColors.accentEmerald)
-                                          .withValues(alpha: 0.35),
-                                    ),
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(12),
-                                    ),
-                                    onPressed: () => CategoryManagerModal.show(context),
-                                  ),
-                                ),
-                              ],
-                            ],
-                          ),
-                        );
-                      },
-                    ),
-                  ],
+                  ),
                 ),
               ),
-            ),
 
             // Products Grid / List Responsive
             filteredItems.isEmpty
@@ -1023,5 +1113,34 @@ class _InventoryCard extends StatelessWidget {
     ),
   ),
 );
+  }
+}
+
+class _StickySearchFilterDelegate extends SliverPersistentHeaderDelegate {
+  final Widget child;
+  final double height;
+
+  _StickySearchFilterDelegate({
+    required this.child,
+    required this.height,
+  });
+
+  @override
+  double get minExtent => height;
+
+  @override
+  double get maxExtent => height;
+
+  @override
+  Widget build(BuildContext context, double shrinkOffset, bool overlapsContent) {
+    return SizedBox(
+      height: height,
+      child: child,
+    );
+  }
+
+  @override
+  bool shouldRebuild(covariant _StickySearchFilterDelegate oldDelegate) {
+    return oldDelegate.child != child || oldDelegate.height != height;
   }
 }
