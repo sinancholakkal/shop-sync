@@ -44,6 +44,8 @@ class _AddEditItemDialogState extends State<AddEditItemDialog> {
   late TextEditingController _wholesaleMarginController;
   late TextEditingController _quantityController;
   late TextEditingController _minThresholdController;
+  late TextEditingController _searchKeywordController;
+  late List<String> _searchKeywords;
   String _selectedCategory = 'Electronics';
   bool _isCalculating = false;
 
@@ -53,6 +55,8 @@ class _AddEditItemDialogState extends State<AddEditItemDialog> {
     final item = widget.item;
     _nameController = TextEditingController(text: item?.name ?? '');
     _skuController = TextEditingController(text: item?.sku ?? '');
+    _searchKeywordController = TextEditingController();
+    _searchKeywords = List<String>.from(item?.searchKeywords ?? []);
     _costPriceController = TextEditingController(
       text: item != null ? (item.costPrice > 0 ? item.costPrice.toStringAsFixed(2) : '') : '',
     );
@@ -120,7 +124,28 @@ class _AddEditItemDialogState extends State<AddEditItemDialog> {
     _wholesaleMarginController.dispose();
     _quantityController.dispose();
     _minThresholdController.dispose();
+    _searchKeywordController.dispose();
     super.dispose();
+  }
+
+  void _addSearchKeyword() {
+    final keyword = _searchKeywordController.text.trim();
+    if (keyword.isNotEmpty) {
+      if (!_searchKeywords.any((k) => k.toLowerCase() == keyword.toLowerCase())) {
+        setState(() {
+          _searchKeywords.add(keyword);
+          _searchKeywordController.clear();
+        });
+      } else {
+        _searchKeywordController.clear();
+      }
+    }
+  }
+
+  void _removeSearchKeyword(String keyword) {
+    setState(() {
+      _searchKeywords.remove(keyword);
+    });
   }
 
   void _onCostPriceChanged(String val) {
@@ -334,6 +359,10 @@ class _AddEditItemDialogState extends State<AddEditItemDialog> {
 
     final item = InventoryItem(
       id: existingItem?.id ?? 'inv_${now.millisecondsSinceEpoch}',
+      itemNumber: (existingItem != null && existingItem.itemNumber > 0)
+          ? existingItem.itemNumber
+          : (appState?.nextItemNumber ?? 1),
+      searchKeywords: _searchKeywords,
       name: name,
       sku: sku,
       category: _selectedCategory,
@@ -591,14 +620,42 @@ class _AddEditItemDialogState extends State<AddEditItemDialog> {
                           ),
                           const SizedBox(width: 12),
                           Expanded(
-                            child: Text(
-                              isEditing ? 'Edit Inventory Product' : 'Add New Inventory Product',
-                              style: GoogleFonts.outfit(
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
-                                color: isDark ? Colors.white : Colors.black87,
-                              ),
-                              overflow: TextOverflow.ellipsis,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: Text(
+                                        isEditing ? 'Edit Inventory Product' : 'Add New Inventory Product',
+                                        style: GoogleFonts.outfit(
+                                          fontSize: 18,
+                                          fontWeight: FontWeight.bold,
+                                          color: isDark ? Colors.white : Colors.black87,
+                                        ),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 3),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.primaryLight.withValues(alpha: 0.15),
+                                    borderRadius: BorderRadius.circular(6),
+                                    border: Border.all(color: AppColors.primaryLight.withValues(alpha: 0.35)),
+                                  ),
+                                  child: Text(
+                                    'Item #${(widget.item != null && widget.item!.itemNumber > 0) ? widget.item!.itemNumber : (appState?.nextItemNumber ?? 1)} (Auto-Assigned)',
+                                    style: GoogleFonts.outfit(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w600,
+                                      color: AppColors.primaryLight,
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                         ],
@@ -621,6 +678,79 @@ class _AddEditItemDialogState extends State<AddEditItemDialog> {
                     prefixIcon: Icon(Icons.shopping_bag_outlined),
                   ),
                 ),
+                const SizedBox(height: 16),
+
+                // Suggested Search Keys / Aliases
+                Row(
+                  children: [
+                    Flexible(
+                      child: Text(
+                        'Suggested Search Keys / Aliases',
+                        style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w600),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Tooltip(
+                      message: 'Add regional or alternative names (e.g. "ചായയരിപ്പ", "Strainer") so staff & customers can find this item instantly in search.',
+                      child: Icon(Icons.info_outline_rounded, size: 15, color: isDark ? Colors.white60 : Colors.black45),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  'Alternative search keywords (e.g., ചായയരിപ്പ, ടീ സ്ട്രൈനർ, Strainer).',
+                  style: GoogleFonts.outfit(fontSize: 11, color: isDark ? Colors.white60 : Colors.black45),
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: _searchKeywordController,
+                        onSubmitted: (_) => _addSearchKeyword(),
+                        textInputAction: TextInputAction.done,
+                        decoration: InputDecoration(
+                          hintText: 'Type keyword (e.g. ചായയരിപ്പ) & tap +',
+                          prefixIcon: const Icon(Icons.tag_rounded, size: 18),
+                          suffixIcon: IconButton(
+                            icon: const Icon(Icons.add_circle_rounded, color: AppColors.primaryLight),
+                            tooltip: 'Add Keyword / ചേർക്കുക',
+                            onPressed: _addSearchKeyword,
+                          ),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                if (_searchKeywords.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: _searchKeywords.map((keyword) {
+                      return Chip(
+                        label: Text(
+                          keyword,
+                          style: GoogleFonts.outfit(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                            color: isDark ? Colors.white : Colors.black87,
+                          ),
+                        ),
+                        deleteIcon: const Icon(Icons.close_rounded, size: 15),
+                        deleteIconColor: AppColors.accentRose,
+                        onDeleted: () => _removeSearchKeyword(keyword),
+                        backgroundColor: AppColors.primary.withValues(alpha: 0.12),
+                        side: BorderSide(color: AppColors.primary.withValues(alpha: 0.25)),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 0),
+                        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      );
+                    }).toList(),
+                  ),
+                ],
                 const SizedBox(height: 16),
 
                 LayoutBuilder(

@@ -75,6 +75,8 @@ class InventoryItem {
   final DateTime stockLastUpdated;
   final DateTime createdAt;
   final List<PriceHistoryEntry> priceHistory;
+  final int itemNumber;
+  final List<String> searchKeywords;
 
   InventoryItem({
     required this.id,
@@ -93,7 +95,11 @@ class InventoryItem {
     DateTime? stockLastUpdated,
     DateTime? createdAt,
     List<PriceHistoryEntry>? priceHistory,
+    int? itemNumber,
+    List<String>? searchKeywords,
   })  : wholesalePrice = wholesalePrice ?? price,
+        itemNumber = itemNumber ?? 0,
+        searchKeywords = searchKeywords != null ? List.unmodifiable(searchKeywords) : const [],
         priceLastUpdated = priceLastUpdated ?? lastUpdated,
         stockLastUpdated = stockLastUpdated ?? lastUpdated,
         createdAt = createdAt ?? lastUpdated,
@@ -152,6 +158,8 @@ class InventoryItem {
     DateTime? stockLastUpdated,
     DateTime? createdAt,
     List<PriceHistoryEntry>? priceHistory,
+    int? itemNumber,
+    List<String>? searchKeywords,
   }) {
     final now = DateTime.now();
     final newPrice = price ?? this.price;
@@ -201,6 +209,8 @@ class InventoryItem {
       stockLastUpdated: stockLastUpdated ?? (stockChanged ? now : this.stockLastUpdated),
       createdAt: createdAt ?? this.createdAt,
       priceHistory: updatedHistory,
+      itemNumber: itemNumber ?? this.itemNumber,
+      searchKeywords: searchKeywords ?? this.searchKeywords,
     );
   }
 
@@ -222,6 +232,8 @@ class InventoryItem {
       'stockLastUpdated': stockLastUpdated.toIso8601String(),
       'createdAt': createdAt.toIso8601String(),
       'priceHistory': priceHistory.map((e) => e.toMap()).toList(),
+      'itemNumber': itemNumber,
+      'searchKeywords': searchKeywords,
     };
   }
 
@@ -283,6 +295,15 @@ class InventoryItem {
       ];
     }
 
+    final rawKeywords = map['searchKeywords'];
+    List<String> keywords = [];
+    if (rawKeywords is List) {
+      keywords = rawKeywords
+          .map((e) => e.toString().trim())
+          .where((e) => e.isNotEmpty)
+          .toList();
+    }
+
     return InventoryItem(
       id: docId,
       name: map['name'] as String? ?? 'Unnamed Product',
@@ -300,6 +321,8 @@ class InventoryItem {
       stockLastUpdated: stockLastUpdatedVal,
       createdAt: createdAtVal,
       priceHistory: history,
+      itemNumber: (map['itemNumber'] as num?)?.toInt() ?? 0,
+      searchKeywords: keywords,
     );
   }
 }

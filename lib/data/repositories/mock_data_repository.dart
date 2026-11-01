@@ -82,6 +82,8 @@ class MockDataRepository {
         priceLastUpdated: now.subtract(const Duration(days: 3)),
         stockLastUpdated: now.subtract(const Duration(hours: 3)),
         lastUpdated: now.subtract(const Duration(hours: 3)),
+        itemNumber: 1,
+        searchKeywords: ['Headphone', 'Wireless', 'Noise Cancelling', 'Bluetooth'],
         priceHistory: [
           PriceHistoryEntry(
             timestamp: now.subtract(const Duration(days: 30)),
@@ -128,6 +130,8 @@ class MockDataRepository {
         priceLastUpdated: now.subtract(const Duration(hours: 5)),
         stockLastUpdated: now.subtract(const Duration(hours: 5)),
         lastUpdated: now.subtract(const Duration(hours: 5)),
+        itemNumber: 2,
+        searchKeywords: ['Fast Charger', 'Adapter', '65W GaN', 'Dual Port'],
         priceHistory: [
           PriceHistoryEntry(
             timestamp: now.subtract(const Duration(days: 20)),
@@ -165,6 +169,8 @@ class MockDataRepository {
         priceLastUpdated: now.subtract(const Duration(days: 1)),
         stockLastUpdated: now.subtract(const Duration(days: 1)),
         lastUpdated: now.subtract(const Duration(days: 1)),
+        itemNumber: 3,
+        searchKeywords: ['Mechanical Keyboard', 'RGB', 'Gaming Keyboard', 'Typing'],
         priceHistory: [
           PriceHistoryEntry(
             timestamp: now.subtract(const Duration(days: 45)),
@@ -211,6 +217,8 @@ class MockDataRepository {
         priceLastUpdated: now.subtract(const Duration(hours: 12)),
         stockLastUpdated: now.subtract(const Duration(hours: 12)),
         lastUpdated: now.subtract(const Duration(hours: 12)),
+        itemNumber: 4,
+        searchKeywords: ['Gaming Mouse', 'Optical Mouse', 'USB Mouse', 'DPI'],
         priceHistory: [
           PriceHistoryEntry(
             timestamp: now.subtract(const Duration(days: 15)),
@@ -248,6 +256,8 @@ class MockDataRepository {
         priceLastUpdated: now.subtract(const Duration(days: 2)),
         stockLastUpdated: now.subtract(const Duration(days: 2)),
         lastUpdated: now.subtract(const Duration(days: 2)),
+        itemNumber: 5,
+        searchKeywords: ['Type-C Cable', 'Thunderbolt', 'Charging Cord', 'Fast Cable'],
         priceHistory: [
           PriceHistoryEntry(
             timestamp: now.subtract(const Duration(days: 60)),
@@ -285,6 +295,8 @@ class MockDataRepository {
         priceLastUpdated: now.subtract(const Duration(days: 3)),
         stockLastUpdated: now.subtract(const Duration(days: 3)),
         lastUpdated: now.subtract(const Duration(days: 3)),
+        itemNumber: 6,
+        searchKeywords: ['Laptop Stand', 'Aluminium Stand', 'Desk Holder', 'Riser'],
         priceHistory: [
           PriceHistoryEntry(
             timestamp: now.subtract(const Duration(days: 25)),
@@ -322,6 +334,8 @@ class MockDataRepository {
         priceLastUpdated: now.subtract(const Duration(hours: 8)),
         stockLastUpdated: now.subtract(const Duration(hours: 8)),
         lastUpdated: now.subtract(const Duration(hours: 8)),
+        itemNumber: 7,
+        searchKeywords: ['Webcam', '4K Camera', 'Streaming', 'Microphone'],
         priceHistory: [
           PriceHistoryEntry(
             timestamp: now.subtract(const Duration(days: 35)),
@@ -349,6 +363,36 @@ class MockDataRepository {
             marginPercent: 87.5,
             wholesaleMarginPercent: 35.4,
             note: 'Bulk Discount Intake',
+          ),
+        ],
+      ),
+      InventoryItem(
+        id: 'inv_08',
+        name: 'Stainless Steel Tea Strainer (സ്ട്രൈനർ)',
+        sku: 'KIT-STR-008',
+        category: 'Groceries',
+        price: 9.99,
+        wholesalePrice: 6.50,
+        costPrice: 4.00,
+        marginPercent: 149.7,
+        wholesaleMarginPercent: 62.5,
+        quantity: 35,
+        minThreshold: 10,
+        createdAt: now.subtract(const Duration(days: 10)),
+        priceLastUpdated: now.subtract(const Duration(days: 1)),
+        stockLastUpdated: now.subtract(const Duration(days: 1)),
+        lastUpdated: now.subtract(const Duration(days: 1)),
+        itemNumber: 8,
+        searchKeywords: ['ചായയരിപ്പ', 'ടീ സ്ട്രൈനർ', 'Strainer', 'Tea Filter', 'Arippa'],
+        priceHistory: [
+          PriceHistoryEntry(
+            timestamp: now.subtract(const Duration(days: 10)),
+            price: 9.99,
+            wholesalePrice: 6.50,
+            costPrice: 4.00,
+            marginPercent: 149.7,
+            wholesaleMarginPercent: 62.5,
+            note: 'Initial Stocking',
           ),
         ],
       ),

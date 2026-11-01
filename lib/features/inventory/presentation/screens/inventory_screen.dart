@@ -224,9 +224,17 @@ class _InventoryScreenState extends State<InventoryScreen> {
       _selectedCategory = appState.inventoryFilterCategory;
     }
 
+    final q = _searchQuery.trim().toLowerCase();
+    final cleanNum = q.replaceAll('#', '').trim();
+    final queryNum = int.tryParse(cleanNum);
+
     final filteredItems = appState.inventoryList.where((item) {
-      final matchesSearch = item.name.toLowerCase().contains(_searchQuery.toLowerCase()) ||
-          item.sku.toLowerCase().contains(_searchQuery.toLowerCase());
+      final matchesSearch = q.isEmpty ||
+          item.name.toLowerCase().contains(q) ||
+          item.sku.toLowerCase().contains(q) ||
+          item.category.toLowerCase().contains(q) ||
+          (queryNum != null && item.itemNumber == queryNum) ||
+          item.searchKeywords.any((k) => k.toLowerCase().contains(q));
       if (!matchesSearch) return false;
 
       if (_selectedCategory == 'All') return true;
@@ -367,7 +375,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
                     TextField(
                       onChanged: (val) => setState(() => _searchQuery = val),
                       decoration: const InputDecoration(
-                        hintText: 'Search products by name or SKU...',
+                        hintText: 'Search by name, #item code, SKU, or keywords (e.g. ചായയരിപ്പ)...',
                         prefixIcon: Icon(Icons.search_rounded),
                       ),
                     ),
@@ -632,7 +640,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
                         crossAxisCount: context.isDesktop
                             ? 3
                             : (context.isTablet ? 2 : 1),
-                        mainAxisExtent: 245,
+                        mainAxisExtent: 250,
                         crossAxisSpacing: 16,
                         mainAxisSpacing: 16,
                       ),
@@ -759,117 +767,160 @@ class _InventoryCard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              // Top row: category & status badge & menu
+              // Top row: Item # badge (top-left) + category & status badge & menu
               Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Flexible(
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: AppColors.primary.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Text(
-                    item.category,
-                    style: GoogleFonts.outfit(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.primaryLight,
-                    ),
-                    overflow: TextOverflow.ellipsis,
-                    maxLines: 1,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 6),
-              Flexible(
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Flexible(
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: badgeColor.withValues(alpha: 0.15),
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: badgeColor.withValues(alpha: 0.3)),
-                        ),
-                        child: Text(
-                          badgeText,
-                          style: GoogleFonts.outfit(
-                            fontSize: 11,
-                            fontWeight: FontWeight.bold,
-                            color: badgeColor,
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Flexible(
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3.5),
+                          decoration: BoxDecoration(
+                            color: AppColors.primaryLight.withValues(alpha: 0.18),
+                            borderRadius: BorderRadius.circular(7),
+                            border: Border.all(color: AppColors.primaryLight.withValues(alpha: 0.35)),
                           ),
-                          overflow: TextOverflow.ellipsis,
-                          maxLines: 1,
-                        ),
-                      ),
-                    ),
-                    if (canModify) ...[
-                      const SizedBox(width: 4),
-                      PopupMenuButton<String>(
-                        padding: EdgeInsets.zero,
-                        icon: const Icon(Icons.more_vert_rounded, size: 18),
-                        onSelected: (val) {
-                          if (val == 'edit') onEdit();
-                          if (val == 'delete') onDelete();
-                        },
-                        itemBuilder: (_) => [
-                          const PopupMenuItem(
-                            value: 'edit',
-                            child: Row(
-                              children: [
-                                Icon(Icons.edit_rounded, size: 18),
-                                SizedBox(width: 8),
-                                Text('Edit Item'),
-                              ],
+                          child: Text(
+                            '#${item.itemNumber}',
+                            style: GoogleFonts.outfit(
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                              color: AppColors.primaryLight,
                             ),
                           ),
-                          const PopupMenuItem(
-                            value: 'delete',
-                            child: Row(
-                              children: [
-                                Icon(Icons.delete_outline_rounded, size: 18, color: AppColors.accentRose),
-                                SizedBox(width: 8),
-                                Text('Delete', style: TextStyle(color: AppColors.accentRose)),
-                              ],
+                        ),
+                        const SizedBox(width: 6),
+                        Flexible(
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: AppColors.primary.withValues(alpha: 0.12),
+                              borderRadius: BorderRadius.circular(8),
                             ),
+                            child: Text(
+                              item.category,
+                              style: GoogleFonts.outfit(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.primaryLight,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                              maxLines: 1,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Flexible(
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Flexible(
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: badgeColor.withValues(alpha: 0.15),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: badgeColor.withValues(alpha: 0.3)),
+                            ),
+                            child: Text(
+                              badgeText,
+                              style: GoogleFonts.outfit(
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold,
+                                color: badgeColor,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                              maxLines: 1,
+                            ),
+                          ),
+                        ),
+                        if (canModify) ...[
+                          const SizedBox(width: 4),
+                          PopupMenuButton<String>(
+                            padding: EdgeInsets.zero,
+                            icon: const Icon(Icons.more_vert_rounded, size: 18),
+                            onSelected: (val) {
+                              if (val == 'edit') onEdit();
+                              if (val == 'delete') onDelete();
+                            },
+                            itemBuilder: (_) => [
+                              const PopupMenuItem(
+                                value: 'edit',
+                                child: Row(
+                                  children: [
+                                    Icon(Icons.edit_rounded, size: 18),
+                                    SizedBox(width: 8),
+                                    Text('Edit Item'),
+                                  ],
+                                ),
+                              ),
+                              const PopupMenuItem(
+                                value: 'delete',
+                                child: Row(
+                                  children: [
+                                    Icon(Icons.delete_outline_rounded, size: 18, color: AppColors.accentRose),
+                                    SizedBox(width: 8),
+                                    Text('Delete', style: TextStyle(color: AppColors.accentRose)),
+                                  ],
+                                ),
+                              ),
+                            ],
                           ),
                         ],
-                      ),
-                    ],
-                  ],
-                ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
-            ],
-          ),
 
-          // Title & SKU
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                item.name,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: GoogleFonts.outfit(
-                  fontSize: 15,
-                  fontWeight: FontWeight.bold,
-                  color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
-                ),
+              // Title, SKU & Keywords
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    item.name,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: GoogleFonts.outfit(
+                      fontSize: 15,
+                      fontWeight: FontWeight.bold,
+                      color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Row(
+                    children: [
+                      Text(
+                        'SKU: ${item.sku}',
+                        style: GoogleFonts.outfit(
+                          fontSize: 12,
+                          color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
+                        ),
+                      ),
+                      if (item.searchKeywords.isNotEmpty) ...[
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            '• ${item.searchKeywords.join(", ")}',
+                            style: GoogleFonts.outfit(
+                              fontSize: 11,
+                              color: AppColors.primaryLight.withValues(alpha: 0.85),
+                              fontStyle: FontStyle.italic,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ],
               ),
-              const SizedBox(height: 2),
-              Text(
-                'SKU: ${item.sku}',
-                style: GoogleFonts.outfit(
-                  fontSize: 12,
-                  color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
-                ),
-              ),
-            ],
-          ),
 
           // Price & Stock Count Row
           Row(

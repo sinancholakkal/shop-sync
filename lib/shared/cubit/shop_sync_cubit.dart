@@ -58,6 +58,12 @@ class ShopSyncState {
   bool get isCategoryLimitReached => allProductCategories.length >= maxCategoryLimit;
   int get remainingCategorySlots => (maxCategoryLimit - allProductCategories.length).clamp(0, maxCategoryLimit);
 
+  int get nextItemNumber {
+    if (inventoryList.isEmpty) return 1;
+    final maxNum = inventoryList.map((i) => i.itemNumber).fold(0, (max, cur) => cur > max ? cur : max);
+    return maxNum + 1;
+  }
+
   /// Aggregated list of all product categories (max 5)
   List<String> get allProductCategories {
     final list = List<String>.from(customCategories);

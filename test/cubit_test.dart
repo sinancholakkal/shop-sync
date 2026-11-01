@@ -1217,6 +1217,145 @@ void main() {
       expect(find.text('Record New Sale'), findsNothing);
       expect(appState.transactionList.length, initialTxCount + 1);
     });
+
+    test('InventoryItem itemNumber and searchKeywords serialization & copyWith', () {
+      final item = InventoryItem(
+        id: 'inv_test_item',
+        name: 'Stainless Steel Tea Strainer (സ്ട്രൈനർ)',
+        sku: 'KIT-STR-01',
+        category: 'Kitchenware',
+        price: 15.00,
+        wholesalePrice: 10.00,
+        costPrice: 7.00,
+        quantity: 30,
+        minThreshold: 5,
+        itemNumber: 8,
+        searchKeywords: ['ചായയരിപ്പ', 'ടീ സ്ട്രൈനർ', 'Strainer', 'Tea Filter'],
+        lastUpdated: DateTime.now(),
+      );
+
+      expect(item.itemNumber, 8);
+      expect(item.searchKeywords, contains('ചായയരിപ്പ'));
+      expect(item.searchKeywords.length, 4);
+
+      // toMap serialization
+      final map = item.toMap();
+      expect(map['itemNumber'], 8);
+      expect(map['searchKeywords'], isA<List>());
+      expect((map['searchKeywords'] as List).contains('ചായയരിപ്പ'), isTrue);
+
+      // fromMap deserialization
+      final restored = InventoryItem.fromMap(map, 'inv_test_item');
+      expect(restored.itemNumber, 8);
+      expect(restored.searchKeywords, equals(['ചായയരിപ്പ', 'ടീ സ്ട്രൈനർ', 'Strainer', 'Tea Filter']));
+
+      // copyWith
+      final updated = item.copyWith(
+        itemNumber: 9,
+        searchKeywords: ['ചായയരിപ്പ', 'Arippa'],
+      );
+      expect(updated.itemNumber, 9);
+      expect(updated.searchKeywords, equals(['ചായയരിപ്പ', 'Arippa']));
+    });
+
+    test('AppStateProvider nextItemNumber calculation and auto-increment on add', () {
+      final appState = AppStateProvider();
+      // Starts at 1 when list is empty
+      expect(appState.nextItemNumber, 1);
+
+      // Add item with itemNumber: 5
+      appState.addInventoryItem(InventoryItem(
+        id: 'inv_item_5',
+        name: 'Item Five',
+        sku: 'SKU-05',
+        category: 'Electronics',
+        price: 50.0,
+        costPrice: 30.0,
+        quantity: 10,
+        minThreshold: 2,
+        itemNumber: 5,
+        lastUpdated: DateTime.now(),
+      ));
+      expect(appState.nextItemNumber, 6);
+
+      // Add a product with itemNumber: 0 (unset / auto-increment)
+      final newItem = InventoryItem(
+        id: 'inv_auto_inc_test',
+        name: 'Auto Number Test Mixer',
+        sku: 'MIX-AUTO-01',
+        category: 'Appliances',
+        price: 89.0,
+        costPrice: 60.0,
+        quantity: 5,
+        minThreshold: 5,
+        lastUpdated: DateTime.now(),
+        // itemNumber is omitted/0
+      );
+
+      appState.addInventoryItem(newItem);
+      final added = appState.inventoryList.firstWhere((i) => i.id == 'inv_auto_inc_test');
+      expect(added.itemNumber, 6);
+      expect(appState.nextItemNumber, 7);
+    });
+
+    testWidgets('AddEditItemDialog displays auto-assigned item number and adds search keyword chips', (tester) async {
+      final appState = AppStateProvider();
+      InventoryItem? saved;
+
+      await tester.pumpWidget(
+        MultiProvider(
+          providers: [
+            ChangeNotifierProvider(create: (_) => ThemeProvider()),
+            ChangeNotifierProvider.value(value: appState),
+          ],
+          child: MaterialApp(
+            home: Scaffold(
+              body: AddEditItemDialog(
+                onSave: (val) => saved = val,
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Verify Auto-Assigned Item Number is displayed
+      expect(find.textContaining('Auto-Assigned'), findsOneWidget);
+      expect(find.text('Suggested Search Keys / Aliases'), findsOneWidget);
+
+      // Fill in product details
+      await tester.enterText(find.widgetWithText(TextField, 'e.g. Mechanical RGB Keyboard'), 'Tea Strainer Pro');
+      await tester.enterText(find.widgetWithText(TextField, 'e.g. PER-MK-104'), 'STR-PRO-99');
+      await tester.enterText(find.widgetWithText(TextField, '0.00').first, '10.00'); // Cost price
+
+      // Add keyword: "ചായയരിപ്പ"
+      final keywordField = find.widgetWithText(TextField, 'Type keyword (e.g. ചായയരിപ്പ) & tap +');
+      expect(keywordField, findsOneWidget);
+      await tester.enterText(keywordField, 'ചായയരിപ്പ');
+      await tester.tap(find.byTooltip('Add Keyword / ചേർക്കുക'));
+      await tester.pumpAndSettle();
+
+      // Chip for "ചായയരിപ്പ" should appear
+      expect(find.text('ചായയരിപ്പ'), findsOneWidget);
+
+      // Add another keyword: "Strainer"
+      await tester.enterText(keywordField, 'Strainer');
+      await tester.tap(find.byTooltip('Add Keyword / ചേർക്കുക'));
+      await tester.pumpAndSettle();
+      expect(find.text('Strainer'), findsOneWidget);
+
+      // Submit product
+      final saveBtn = find.text('Create Inventory Item');
+      await tester.ensureVisible(saveBtn);
+      await tester.pumpAndSettle();
+      await tester.tap(saveBtn);
+      await tester.pumpAndSettle();
+
+      expect(saved, isNotNull);
+      expect(saved!.searchKeywords, contains('ചായയരിപ്പ'));
+      expect(saved!.searchKeywords, contains('Strainer'));
+      expect(saved!.itemNumber, greaterThanOrEqualTo(1));
+    });
   });
 }
 

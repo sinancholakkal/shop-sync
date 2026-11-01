@@ -585,10 +585,19 @@ class AppStateProvider extends ChangeNotifier {
     return newStaff;
   }
 
+  /// Calculates the next sequential item number (1, 2, 3...) for new products
+  int get nextItemNumber {
+    if (_inventoryList.isEmpty) return 1;
+    final maxNum = _inventoryList.map((i) => i.itemNumber).fold(0, (max, cur) => cur > max ? cur : max);
+    return maxNum + 1;
+  }
+
   // Inventory Management Actions
   void addInventoryItem(InventoryItem item) {
-    _inventoryList.insert(0, item);
-    FirestoreService.instance.addInventoryItem(_shopId, item);
+    final effectiveNumber = item.itemNumber > 0 ? item.itemNumber : nextItemNumber;
+    final effectiveItem = item.copyWith(itemNumber: effectiveNumber);
+    _inventoryList.insert(0, effectiveItem);
+    FirestoreService.instance.addInventoryItem(_shopId, effectiveItem);
     notifyListeners();
   }
 
