@@ -5,6 +5,7 @@ import '../../core/services/firestore_service.dart';
 import '../../data/repositories/mock_data_repository.dart';
 import '../../features/auth/domain/models/user_role.dart';
 import '../../features/inventory/domain/models/inventory_item.dart';
+import '../../core/services/session_storage_service.dart';
 import '../../features/staff/domain/models/staff_model.dart';
 import '../../features/transactions/domain/models/transaction_model.dart';
 
@@ -148,9 +149,43 @@ class AppStateProvider extends ChangeNotifier {
   int get pendingStaffCount => pendingStaffList.length;
 
   // Auth Operations
-  /// Automatically restores session if Firebase user is already logged in
+  /// Automatically restores session if user (Owner or Staff) was previously logged in
   Future<bool> tryRestoreSession() async {
     try {
+      // 1. Check local persistent session storage first (for both Staff & Owner)
+      final savedSession = await SessionStorageService.instance.getSavedSession();
+      if (savedSession != null) {
+        final role = savedSession['role'] as String;
+        final shopId = savedSession['shopId'] as String;
+        final shopName = savedSession['shopName'] as String;
+
+        if (role == 'staff') {
+          final savedStaff = savedSession['staff'] as StaffMember;
+          StaffMember effectiveStaff = savedStaff;
+          try {
+            final freshStaff = await FirestoreService.instance.getStaffMember(shopId, savedStaff.id);
+            if (freshStaff != null) {
+              if (!freshStaff.isApproved || !freshStaff.isActive) {
+                // If owner revoked access, clear session and return false
+                await SessionStorageService.instance.clearSession();
+                return false;
+              }
+              effectiveStaff = freshStaff;
+            }
+          } catch (_) {}
+
+          if (effectiveStaff.isApproved) {
+            loginAsStaff(effectiveStaff, shopId: shopId, shopName: shopName);
+            return true;
+          }
+        } else if (role == 'owner') {
+          final email = savedSession['email'] as String;
+          loginAsOwner(email, shopId: shopId, shopName: shopName);
+          return true;
+        }
+      }
+
+      // 2. Fallback to Firebase Auth user
       final user = FirebaseAuthService.instance.currentUser;
       if (user != null) {
         final profile = await FirestoreService.instance.getUserProfile(user.uid);
@@ -194,6 +229,11 @@ class AppStateProvider extends ChangeNotifier {
     }
     _currentStaff = null;
     _bindFirestoreStreams(_shopId);
+    SessionStorageService.instance.saveOwnerSession(
+      email: _ownerEmail,
+      shopId: _shopId,
+      shopName: _shopName,
+    );
     notifyListeners();
   }
 
@@ -208,6 +248,11 @@ class AppStateProvider extends ChangeNotifier {
       _shopName = shopName;
     }
     _bindFirestoreStreams(_shopId);
+    SessionStorageService.instance.saveStaffSession(
+      staff: staff,
+      shopId: _shopId,
+      shopName: _shopName,
+    );
     notifyListeners();
   }
 
@@ -215,6 +260,7 @@ class AppStateProvider extends ChangeNotifier {
     _isAuthenticated = false;
     _cancelFirestoreStreams();
     FirebaseAuthService.instance.signOut();
+    SessionStorageService.instance.clearSession();
     notifyListeners();
   }
 

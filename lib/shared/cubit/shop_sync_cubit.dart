@@ -6,6 +6,7 @@ import '../../core/services/firestore_service.dart';
 import '../../data/repositories/mock_data_repository.dart';
 import '../../features/auth/domain/models/user_role.dart';
 import '../../features/inventory/domain/models/inventory_item.dart';
+import '../../core/services/session_storage_service.dart';
 import '../../features/staff/domain/models/staff_model.dart';
 import '../../features/transactions/domain/models/transaction_model.dart';
 
@@ -170,32 +171,45 @@ class ShopSyncCubit extends Cubit<ShopSyncState> {
 
   void loginAsOwner(String email, {String? shopId, String? shopName}) {
     final activeShopId = shopId ?? state.shopId;
+    final activeShopName = shopName ?? state.shopName;
     emit(state.copyWith(
       isAuthenticated: true,
       currentUserRole: UserRole.owner,
       ownerEmail: email,
       shopId: activeShopId,
-      shopName: shopName ?? state.shopName,
+      shopName: activeShopName,
       clearCurrentStaff: true,
     ));
     _bindFirestoreStreams(activeShopId);
+    SessionStorageService.instance.saveOwnerSession(
+      email: email,
+      shopId: activeShopId,
+      shopName: activeShopName,
+    );
   }
 
   void loginAsStaff(StaffMember staff, {String? shopId, String? shopName}) {
     final activeShopId = shopId ?? state.shopId;
+    final activeShopName = shopName ?? state.shopName;
     emit(state.copyWith(
       isAuthenticated: true,
       currentUserRole: UserRole.staff,
       currentStaff: staff,
       shopId: activeShopId,
-      shopName: shopName ?? state.shopName,
+      shopName: activeShopName,
     ));
     _bindFirestoreStreams(activeShopId);
+    SessionStorageService.instance.saveStaffSession(
+      staff: staff,
+      shopId: activeShopId,
+      shopName: activeShopName,
+    );
   }
 
   void logout() {
     _cancelFirestoreStreams();
     FirebaseAuthService.instance.signOut();
+    SessionStorageService.instance.clearSession();
     emit(state.copyWith(isAuthenticated: false));
   }
 

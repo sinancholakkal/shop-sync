@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shop_sync_app/core/theme/theme_provider.dart';
 import 'package:shop_sync_app/features/auth/domain/models/user_role.dart';
 import 'package:shop_sync_app/features/auth/presentation/screens/owner_auth_screen.dart';
@@ -28,6 +29,10 @@ Widget _buildTestApp({required Widget child}) {
 }
 
 void main() {
+  setUp(() {
+    SharedPreferences.setMockInitialValues({});
+  });
+
   group('Zero Overflow Tests Across All Screens & Viewports', () {
     const viewports = [
       Size(320, 568), // Ultra-compact mobile (iPhone SE 1st gen)

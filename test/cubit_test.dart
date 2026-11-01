@@ -7,11 +7,18 @@ import 'package:shop_sync_app/core/theme/theme_provider.dart';
 import 'package:shop_sync_app/features/auth/domain/models/user_role.dart';
 import 'package:shop_sync_app/features/dashboard/presentation/cubit/nav_bar_cubit.dart';
 import 'package:shop_sync_app/features/inventory/domain/models/inventory_item.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:shop_sync_app/core/services/session_storage_service.dart';
+import 'package:shop_sync_app/features/staff/domain/models/staff_model.dart';
 import 'package:shop_sync_app/main.dart';
 import 'package:shop_sync_app/shared/cubit/shop_sync_cubit.dart';
 import 'package:shop_sync_app/shared/providers/app_state_provider.dart';
 
 void main() {
+  setUp(() {
+    SharedPreferences.setMockInitialValues({});
+  });
+
   group('Flutter BLoC / Cubit State Management Tests', () {
     test('NavBarCubit selectTab and setCompact work correctly', () {
       final cubit = NavBarCubit();
@@ -154,6 +161,7 @@ void main() {
       expect(find.text('v1.0.0 • Secured with RBAC'), findsOneWidget);
 
       // 2. Allow splash timer to complete & transition to OwnerAuthScreen
+      await tester.pump(const Duration(milliseconds: 2200));
       await tester.pumpAndSettle();
 
       expect(find.text('ShopSync Admin'), findsOneWidget);
@@ -240,6 +248,45 @@ void main() {
       expect(cubit.state.staffList.where((s) => !s.isApproved).length, 1);
       cubit.rejectStaff(staff2.id);
       expect(cubit.state.staffList.where((s) => !s.isApproved).length, 0);
+    });
+
+    test('SessionStorageService and tryRestoreSession persist and restore staff and owner sessions', () async {
+      SharedPreferences.setMockInitialValues({});
+
+      final staff = StaffMember(
+        id: 'stf_persistent_01',
+        name: 'Jordan Brooks',
+        email: 'jordan@retail.io',
+        permission: StaffPermission.stockCounting,
+        isActive: true,
+        isApproved: true,
+        joinedDate: DateTime.now(),
+        shopId: 'SHOP-PERSIST-01',
+      );
+
+      // Save staff session
+      await SessionStorageService.instance.saveStaffSession(
+        staff: staff,
+        shopId: 'SHOP-PERSIST-01',
+        shopName: 'Persist Shop',
+      );
+
+      final freshAppState = AppStateProvider(initialAuth: false);
+      expect(freshAppState.isAuthenticated, isFalse);
+
+      final restored = await freshAppState.tryRestoreSession();
+      expect(restored, isTrue);
+      expect(freshAppState.isAuthenticated, isTrue);
+      expect(freshAppState.currentUserRole, UserRole.staff);
+      expect(freshAppState.currentStaff?.id, 'stf_persistent_01');
+      expect(freshAppState.shopId, 'SHOP-PERSIST-01');
+
+      // Logout clears session
+      freshAppState.logout();
+      expect(freshAppState.isAuthenticated, isFalse);
+
+      final postLogoutSession = await SessionStorageService.instance.getSavedSession();
+      expect(postLogoutSession, isNull);
     });
   });
 }
