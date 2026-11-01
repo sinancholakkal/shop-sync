@@ -148,6 +148,40 @@ class AppStateProvider extends ChangeNotifier {
   int get pendingStaffCount => pendingStaffList.length;
 
   // Auth Operations
+  /// Automatically restores session if Firebase user is already logged in
+  Future<bool> tryRestoreSession() async {
+    try {
+      final user = FirebaseAuthService.instance.currentUser;
+      if (user != null) {
+        final profile = await FirestoreService.instance.getUserProfile(user.uid);
+        final shopId = profile?['shopId'] as String? ??
+            'SHOP-SYNC-${user.uid.length >= 6 ? user.uid.substring(0, 6).toUpperCase() : user.uid.toUpperCase()}';
+        final shopName = profile?['name'] as String? ?? 'Apex Retail & Tech Hub';
+        final roleStr = profile?['role'] as String? ?? 'owner';
+
+        if (roleStr == 'staff') {
+          final staffMember = StaffMember(
+            id: user.uid,
+            name: profile?['name'] as String? ?? (user.displayName ?? 'Staff Member'),
+            email: user.email ?? '',
+            permission: StaffPermission.stockCounting,
+            isActive: true,
+            isApproved: true,
+            joinedDate: DateTime.now(),
+            shopId: shopId,
+          );
+          loginAsStaff(staffMember, shopId: shopId, shopName: shopName);
+        } else {
+          loginAsOwner(user.email ?? '', shopId: shopId, shopName: shopName);
+        }
+        return true;
+      }
+    } catch (e) {
+      debugPrint('AppStateProvider: tryRestoreSession notice: $e');
+    }
+    return false;
+  }
+
   void loginAsOwner(String email, {String? shopId, String? shopName}) {
     _isAuthenticated = true;
     _currentUserRole = UserRole.owner;

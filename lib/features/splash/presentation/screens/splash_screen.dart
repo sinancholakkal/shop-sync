@@ -50,15 +50,32 @@ class _SplashScreenState extends State<SplashScreen>
 
     _animController.forward();
 
+    // Check existing session in background while splash animation plays
+    _restoreExistingSession();
+
     _timer = Timer(widget.duration, _navigateToNext);
   }
 
-  void _navigateToNext() {
+  Future<void> _restoreExistingSession() async {
+    try {
+      final appState = Provider.of<AppStateProvider>(context, listen: false);
+      if (!appState.isAuthenticated) {
+        await appState.tryRestoreSession();
+      }
+    } catch (_) {}
+  }
+
+  void _navigateToNext() async {
     if (_navigated || !mounted) return;
     _navigated = true;
     _timer?.cancel();
 
     final appState = Provider.of<AppStateProvider>(context, listen: false);
+    if (!appState.isAuthenticated) {
+      await appState.tryRestoreSession();
+    }
+    if (!mounted) return;
+
     final targetScreen = appState.isAuthenticated
         ? const AppShell()
         : const OwnerAuthScreen();
