@@ -742,7 +742,7 @@ class _OwnerAuthScreenState extends State<OwnerAuthScreen> {
                         // Form Inputs
                         if (_isSignUp) ...[
                           Text(
-                            'Shop Business Name',
+                            'Shop Business Name *',
                             style: GoogleFonts.outfit(
                               fontSize: 13,
                               fontWeight: FontWeight.w600,
@@ -752,7 +752,7 @@ class _OwnerAuthScreenState extends State<OwnerAuthScreen> {
                           TextField(
                             controller: _shopNameController,
                             decoration: const InputDecoration(
-                              hintText: 'e.g. Apex Retail & Tech Hub',
+                              hintText: 'e.g. City Supermarket',
                               prefixIcon: Icon(Icons.storefront_rounded),
                             ),
                           ),
@@ -760,7 +760,7 @@ class _OwnerAuthScreenState extends State<OwnerAuthScreen> {
                         ],
 
                         Text(
-                          'Owner Email Address',
+                          'Owner Email Address *',
                           style: GoogleFonts.outfit(
                             fontSize: 13,
                             fontWeight: FontWeight.w600,
@@ -771,14 +771,14 @@ class _OwnerAuthScreenState extends State<OwnerAuthScreen> {
                           controller: _emailController,
                           keyboardType: TextInputType.emailAddress,
                           decoration: const InputDecoration(
-                            hintText: 'owner@apexretail.io',
+                            hintText: 'you@example.com',
                             prefixIcon: Icon(Icons.mail_outline_rounded),
                           ),
                         ),
                         const SizedBox(height: 16),
 
                         Text(
-                          'Password',
+                          'Password *',
                           style: GoogleFonts.outfit(
                             fontSize: 13,
                             fontWeight: FontWeight.w600,
