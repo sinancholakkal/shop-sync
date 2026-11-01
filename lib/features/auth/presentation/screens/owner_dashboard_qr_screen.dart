@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
@@ -15,18 +16,58 @@ class OwnerDashboardQrScreen extends StatefulWidget {
 
 class _OwnerDashboardQrScreenState extends State<OwnerDashboardQrScreen> {
   String? _inviteToken;
+  Timer? _countdownTimer;
+  int _remainingSeconds = 60;
+
+  @override
+  void initState() {
+    super.initState();
+    _startRotationTimer();
+  }
+
+  void _startRotationTimer() {
+    _countdownTimer?.cancel();
+    _remainingSeconds = 60;
+    _countdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+      setState(() {
+        if (_remainingSeconds > 1) {
+          _remainingSeconds--;
+        } else {
+          _remainingSeconds = 60;
+          try {
+            final appState = Provider.of<AppStateProvider>(context, listen: false);
+            _refreshToken(appState.shopId);
+          } catch (_) {}
+        }
+      });
+    });
+  }
 
   void _refreshToken(String shopId) {
     setState(() {
+      _remainingSeconds = 60;
       _inviteToken =
           'shopsync://join?shop=$shopId&auth=${DateTime.now().millisecondsSinceEpoch}';
     });
   }
 
   @override
+  void dispose() {
+    _countdownTimer?.cancel();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final appState = Provider.of<AppStateProvider>(context);
+
+    final token = _inviteToken ??
+        'shopsync://join?shop=${appState.shopId}&auth=${DateTime.now().millisecondsSinceEpoch}';
 
     return Scaffold(
       appBar: AppBar(
@@ -85,14 +126,53 @@ class _OwnerDashboardQrScreenState extends State<OwnerDashboardQrScreen> {
                   ),
                   const SizedBox(height: 6),
                   Text(
-                    'Display this code for new staff members to scan using their mobile app.',
+                    'Display this rotating code for new staff to scan. Old photos expire automatically for security.',
                     textAlign: TextAlign.center,
                     style: GoogleFonts.outfit(
                       fontSize: 13,
                       color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
                     ),
                   ),
-                  const SizedBox(height: 28),
+                  const SizedBox(height: 18),
+
+                  // Rotating Security Token Badge (Option 2)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: AppColors.accentEmerald.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(
+                        color: AppColors.accentEmerald.withValues(alpha: 0.25),
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          width: 8,
+                          height: 8,
+                          decoration: const BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: AppColors.accentEmerald,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Flexible(
+                          child: Text(
+                            'Dynamic QR • Auto-refreshes in ${_remainingSeconds}s',
+                            style: GoogleFonts.outfit(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.accentEmerald,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 24),
 
                   // QR Code Card
                   Container(
@@ -109,8 +189,7 @@ class _OwnerDashboardQrScreenState extends State<OwnerDashboardQrScreen> {
                       ],
                     ),
                     child: QrImageView(
-                      data: _inviteToken ??
-                          'shopsync://join?shop=${appState.shopId}&auth=1',
+                      data: token,
                       version: QrVersions.auto,
                       size: 200.0,
                       gapless: true,

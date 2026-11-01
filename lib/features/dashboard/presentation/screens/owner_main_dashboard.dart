@@ -6,6 +6,8 @@ import 'package:shop_sync_app/core/theme/app_theme.dart';
 import 'package:shop_sync_app/core/widgets/glass_container.dart';
 import 'package:shop_sync_app/features/auth/presentation/screens/owner_dashboard_qr_screen.dart';
 import 'package:shop_sync_app/features/inventory/presentation/widgets/add_edit_item_dialog.dart';
+import 'package:shop_sync_app/features/staff/presentation/widgets/permission_modal.dart';
+import 'package:shop_sync_app/shared/cubit/shop_sync_cubit.dart';
 import 'package:shop_sync_app/shared/providers/app_state_provider.dart';
 
 class OwnerMainDashboard extends StatelessWidget {
@@ -167,6 +169,12 @@ class OwnerMainDashboard extends StatelessWidget {
                       ),
                     ],
 
+                    // Staff Pending Approval Banner (Option 1)
+                    if (appState.isOwner && appState.pendingStaffCount > 0) ...[
+                      const SizedBox(height: 20),
+                      _PendingStaffApprovalQueueCard(appState: appState),
+                    ],
+
                     const SizedBox(height: 24),
 
                     // Quick Stats Grid
@@ -193,9 +201,13 @@ class OwnerMainDashboard extends StatelessWidget {
                           _StatCard(
                             title: 'Active Team Staff',
                             value: '${appState.activeStaffCount} / ${appState.staffList.length}',
-                            subtext: 'Team accounts linked',
+                            subtext: appState.pendingStaffCount > 0
+                                ? '${appState.pendingStaffCount} awaiting approval'
+                                : 'Team accounts linked',
                             icon: Icons.people_alt_rounded,
-                            iconColor: AppColors.secondary,
+                            iconColor: appState.pendingStaffCount > 0
+                                ? Colors.amber
+                                : AppColors.secondary,
                           ),
                           _StatCard(
                             title: 'Completed Sales',
@@ -545,6 +557,203 @@ class _QuickActionButton extends StatelessWidget {
               color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
             ),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PendingStaffApprovalQueueCard extends StatelessWidget {
+  final AppStateProvider appState;
+
+  const _PendingStaffApprovalQueueCard({required this.appState});
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final pendingStaff = appState.pendingStaffList;
+
+    return GlassContainer(
+      borderRadius: 20,
+      color: Colors.amber.withValues(alpha: isDark ? 0.12 : 0.08),
+      border: Border.all(color: Colors.amber.withValues(alpha: 0.35)),
+      padding: const EdgeInsets.all(18),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.amber.withValues(alpha: 0.2),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.shield_outlined,
+                  color: Colors.amber,
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            'Staff Approval Queue',
+                            style: GoogleFonts.outfit(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 15,
+                              color: isDark ? Colors.white : Colors.black87,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: Colors.amber,
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Text(
+                            '${appState.pendingStaffCount} PENDING',
+                            style: GoogleFonts.outfit(
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.black87,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    Text(
+                      'Staff joined via rotating QR code and require your approval to access the store.',
+                      style: GoogleFonts.outfit(
+                        fontSize: 12,
+                        color: isDark ? Colors.white70 : Colors.black54,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          // Pending members list
+          ...pendingStaff.map((staff) {
+            return Container(
+              margin: const EdgeInsets.only(bottom: 10),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: isDark ? Colors.white.withValues(alpha: 0.05) : Colors.black.withValues(alpha: 0.03),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(
+                  color: isDark ? AppColors.darkGlassBorder : AppColors.lightGlassBorder,
+                ),
+              ),
+              child: Row(
+                children: [
+                  CircleAvatar(
+                    radius: 18,
+                    backgroundColor: Colors.amber.withValues(alpha: 0.2),
+                    child: Text(
+                      staff.name.isNotEmpty ? staff.name[0].toUpperCase() : '?',
+                      style: GoogleFonts.outfit(
+                        fontWeight: FontWeight.bold,
+                        color: Colors.amber,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          staff.name,
+                          style: GoogleFonts.outfit(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 13,
+                            color: isDark ? Colors.white : Colors.black87,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        Text(
+                          staff.email,
+                          style: GoogleFonts.outfit(
+                            fontSize: 11,
+                            color: isDark ? Colors.white60 : Colors.black54,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  // Reject button
+                  IconButton(
+                    icon: const Icon(Icons.close_rounded, size: 18, color: AppColors.accentRose),
+                    tooltip: 'Decline Staff',
+                    onPressed: () {
+                      appState.rejectStaff(staff.id);
+                      try {
+                        context.read<ShopSyncCubit?>()?.rejectStaff(staff.id);
+                      } catch (_) {}
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('${staff.name}\'s registration was rejected.'),
+                          duration: const Duration(seconds: 2),
+                        ),
+                      );
+                    },
+                  ),
+                  const SizedBox(width: 4),
+                  // Approve button
+                  ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.accentEmerald,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      elevation: 0,
+                    ),
+                    icon: const Icon(Icons.check_rounded, size: 16),
+                    label: Text(
+                      'Approve',
+                      style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.bold),
+                    ),
+                    onPressed: () {
+                      PermissionAssignmentModal.show(
+                        context,
+                        staff: staff,
+                        isApprovalMode: true,
+                        onSavePermission: (newPerm) {
+                          appState.approveStaff(staff.id, newPerm);
+                          try {
+                            context.read<ShopSyncCubit?>()?.approveStaff(staff.id, newPerm);
+                          } catch (_) {}
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              backgroundColor: AppColors.primary,
+                              content: Text('${staff.name} approved with ${newPerm.title}!'),
+                            ),
+                          );
+                        },
+                        onToggleStatus: () {},
+                      );
+                    },
+                  ),
+                ],
+              ),
+            );
+          }),
         ],
       ),
     );

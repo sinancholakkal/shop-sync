@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'package:shop_sync_app/core/theme/app_theme.dart';
 import 'package:shop_sync_app/core/widgets/glass_container.dart';
+import 'package:shop_sync_app/features/auth/presentation/screens/staff_pending_approval_screen.dart';
 import 'package:shop_sync_app/shared/cubit/shop_sync_cubit.dart';
 import 'package:shop_sync_app/shared/providers/app_state_provider.dart';
 
@@ -117,7 +118,7 @@ class _StaffDetailsInputScreenState extends State<StaffDetailsInputScreen> {
       if (mounted) {
         setState(() => _isLoading = false);
         final appState = Provider.of<AppStateProvider>(context, listen: false);
-        appState.addStaffMemberFromQR(
+        final newStaff = appState.addStaffMemberFromQR(
           name: _nameController.text.trim(),
           email: _emailController.text.trim(),
         );
@@ -128,8 +129,16 @@ class _StaffDetailsInputScreenState extends State<StaffDetailsInputScreen> {
           );
         } catch (_) {}
 
-        // Pop back to root dashboard
-        Navigator.of(context).popUntil((route) => route.isFirst);
+        // Navigate to the Pending Approval screen (Option 1)
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(
+            builder: (_) => StaffPendingApprovalScreen(
+              staffId: newStaff.id,
+              staffName: newStaff.name,
+              shopName: widget.shopName,
+            ),
+          ),
+        );
       }
     });
   }

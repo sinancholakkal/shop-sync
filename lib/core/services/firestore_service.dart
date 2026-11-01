@@ -316,6 +316,49 @@ class FirestoreService {
     }
   }
 
+  Future<void> approveStaffMember(
+    String shopId,
+    String staffId,
+    StaffPermission permission,
+  ) async {
+    try {
+      final firestore = _firestore;
+      if (firestore == null) return;
+
+      await firestore
+          .collection('shops')
+          .doc(shopId)
+          .collection('staff')
+          .doc(staffId)
+          .update({
+        'isApproved': true,
+        'isActive': true,
+        'permission': permission.name,
+      });
+    } catch (e) {
+      debugPrint('FirestoreService: approveStaffMember notice: $e');
+    }
+  }
+
+  Future<void> rejectStaffMember(
+    String shopId,
+    String staffId,
+  ) async {
+    try {
+      final firestore = _firestore;
+      if (firestore == null) return;
+
+      await firestore
+          .collection('shops')
+          .doc(shopId)
+          .collection('staff')
+          .doc(staffId)
+          .delete();
+    } catch (e) {
+      debugPrint('FirestoreService: rejectStaffMember notice: $e');
+    }
+  }
+
   // ----------------------------------------------------
   // Transactions Real-time Streams & CRUD
   // ----------------------------------------------------

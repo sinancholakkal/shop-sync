@@ -8,6 +8,7 @@ import 'package:shop_sync_app/features/auth/domain/models/user_role.dart';
 import 'package:shop_sync_app/features/auth/presentation/screens/owner_dashboard_qr_screen.dart';
 import 'package:shop_sync_app/features/staff/domain/models/staff_model.dart';
 import 'package:shop_sync_app/features/staff/presentation/widgets/permission_modal.dart';
+import 'package:shop_sync_app/shared/cubit/shop_sync_cubit.dart';
 import 'package:shop_sync_app/shared/providers/app_state_provider.dart';
 
 class StaffListScreen extends StatefulWidget {
@@ -120,10 +121,18 @@ class _StaffListScreenState extends State<StaffListScreen> {
                             value: '${appState.activeStaffCount}',
                             color: AppColors.accentEmerald,
                           ),
+                          if (appState.pendingStaffCount > 0) ...[
+                            const SizedBox(width: 12),
+                            _StatChip(
+                              label: 'Pending Approvals',
+                              value: '${appState.pendingStaffCount}',
+                              color: Colors.amber,
+                            ),
+                          ],
                           const SizedBox(width: 12),
                           _StatChip(
                             label: 'Suspended',
-                            value: '${appState.staffList.length - appState.activeStaffCount}',
+                            value: '${appState.staffList.length - appState.activeStaffCount - appState.pendingStaffCount}',
                             color: AppColors.accentRose,
                           ),
                         ],
@@ -139,6 +148,45 @@ class _StaffListScreenState extends State<StaffListScreen> {
                         prefixIcon: Icon(Icons.search_rounded),
                       ),
                     ),
+
+                    // Pending Approval Section (Option 1)
+                    if (isOwner && appState.pendingStaffCount > 0) ...[
+                      const SizedBox(height: 20),
+                      Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: Colors.amber.withValues(alpha: isDark ? 0.12 : 0.08),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(color: Colors.amber.withValues(alpha: 0.35)),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                const Icon(Icons.shield_outlined, color: Colors.amber, size: 20),
+                                const SizedBox(width: 8),
+                                Text(
+                                  'Awaiting Owner Approval (${appState.pendingStaffCount})',
+                                  style: GoogleFonts.outfit(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 15,
+                                    color: isDark ? Colors.white : Colors.black87,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 12),
+                            ...appState.pendingStaffList.map((st) {
+                              return Padding(
+                                padding: const EdgeInsets.only(bottom: 8.0),
+                                child: _StaffPendingApprovalTile(staff: st, appState: appState),
+                              );
+                            }),
+                          ],
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -186,8 +234,22 @@ class _StaffListScreenState extends State<StaffListScreen> {
                                   PermissionAssignmentModal.show(
                                     context,
                                     staff: staff,
+                                    isApprovalMode: !staff.isApproved,
                                     onSavePermission: (newPerm) {
-                                      appState.updateStaffPermission(staff.id, newPerm);
+                                      if (!staff.isApproved) {
+                                        appState.approveStaff(staff.id, newPerm);
+                                        try {
+                                          context.read<ShopSyncCubit?>()?.approveStaff(staff.id, newPerm);
+                                        } catch (_) {}
+                                        ScaffoldMessenger.of(context).showSnackBar(
+                                          SnackBar(
+                                            backgroundColor: AppColors.primary,
+                                            content: Text('${staff.name} approved with ${newPerm.title}!'),
+                                          ),
+                                        );
+                                      } else {
+                                        appState.updateStaffPermission(staff.id, newPerm);
+                                      }
                                     },
                                     onToggleStatus: () {
                                       appState.toggleStaffStatus(staff.id);
@@ -328,17 +390,23 @@ class _StaffCard extends StatelessWidget {
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                       decoration: BoxDecoration(
-                        color: staff.isActive
-                            ? AppColors.accentEmerald.withValues(alpha: 0.15)
-                            : AppColors.accentRose.withValues(alpha: 0.15),
+                        color: !staff.isApproved
+                            ? Colors.amber.withValues(alpha: 0.2)
+                            : (staff.isActive
+                                ? AppColors.accentEmerald.withValues(alpha: 0.15)
+                                : AppColors.accentRose.withValues(alpha: 0.15)),
                         borderRadius: BorderRadius.circular(6),
                       ),
                       child: Text(
-                        staff.isActive ? 'Active' : 'Suspended',
+                        !staff.isApproved
+                            ? 'Pending Approval'
+                            : (staff.isActive ? 'Active' : 'Suspended'),
                         style: GoogleFonts.outfit(
                           fontSize: 10,
                           fontWeight: FontWeight.bold,
-                          color: staff.isActive ? AppColors.accentEmerald : AppColors.accentRose,
+                          color: !staff.isApproved
+                              ? Colors.amber
+                              : (staff.isActive ? AppColors.accentEmerald : AppColors.accentRose),
                         ),
                       ),
                     ),
@@ -400,18 +468,145 @@ class _StaffCard extends StatelessWidget {
           if (isOwner) ...[
             const SizedBox(width: 8),
             IconButton(
-              tooltip: 'Configure Permissions',
+              tooltip: staff.isApproved ? 'Configure Permissions' : 'Review & Approve',
               onPressed: onTapManage,
               icon: Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: isDark ? Colors.white.withValues(alpha: 0.08) : Colors.black.withValues(alpha: 0.05),
+                  color: !staff.isApproved
+                      ? Colors.amber.withValues(alpha: 0.2)
+                      : (isDark ? Colors.white.withValues(alpha: 0.08) : Colors.black.withValues(alpha: 0.05)),
                   shape: BoxShape.circle,
                 ),
-                child: const Icon(Icons.tune_rounded, size: 18),
+                child: Icon(
+                  !staff.isApproved ? Icons.verified_user_rounded : Icons.tune_rounded,
+                  size: 18,
+                  color: !staff.isApproved ? Colors.amber : null,
+                ),
               ),
             ),
           ],
+        ],
+      ),
+    );
+  }
+}
+
+class _StaffPendingApprovalTile extends StatelessWidget {
+  final StaffMember staff;
+  final AppStateProvider appState;
+
+  const _StaffPendingApprovalTile({
+    required this.staff,
+    required this.appState,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: isDark ? Colors.white.withValues(alpha: 0.05) : Colors.black.withValues(alpha: 0.03),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: isDark ? AppColors.darkGlassBorder : AppColors.lightGlassBorder,
+        ),
+      ),
+      child: Row(
+        children: [
+          CircleAvatar(
+            radius: 16,
+            backgroundColor: Colors.amber.withValues(alpha: 0.2),
+            child: Text(
+              staff.name.isNotEmpty ? staff.name[0].toUpperCase() : '?',
+              style: GoogleFonts.outfit(
+                fontWeight: FontWeight.bold,
+                fontSize: 13,
+                color: Colors.amber,
+              ),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  staff.name,
+                  style: GoogleFonts.outfit(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 13,
+                    color: isDark ? Colors.white : Colors.black87,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+                Text(
+                  staff.email,
+                  style: GoogleFonts.outfit(
+                    fontSize: 11,
+                    color: isDark ? Colors.white60 : Colors.black54,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          IconButton(
+            icon: const Icon(Icons.close_rounded, size: 18, color: AppColors.accentRose),
+            tooltip: 'Decline',
+            onPressed: () {
+              appState.rejectStaff(staff.id);
+              try {
+                context.read<ShopSyncCubit?>()?.rejectStaff(staff.id);
+              } catch (_) {}
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('${staff.name}\'s registration was rejected.'),
+                  duration: const Duration(seconds: 2),
+                ),
+              );
+            },
+          ),
+          const SizedBox(width: 4),
+          ElevatedButton.icon(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.accentEmerald,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+              elevation: 0,
+            ),
+            icon: const Icon(Icons.check_rounded, size: 14),
+            label: Text(
+              'Approve',
+              style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.bold),
+            ),
+            onPressed: () {
+              PermissionAssignmentModal.show(
+                context,
+                staff: staff,
+                isApprovalMode: true,
+                onSavePermission: (newPerm) {
+                  appState.approveStaff(staff.id, newPerm);
+                  try {
+                    context.read<ShopSyncCubit?>()?.approveStaff(staff.id, newPerm);
+                  } catch (_) {}
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      backgroundColor: AppColors.primary,
+                      content: Text('${staff.name} approved with ${newPerm.title}!'),
+                    ),
+                  );
+                },
+                onToggleStatus: () {},
+              );
+            },
+          ),
         ],
       ),
     );

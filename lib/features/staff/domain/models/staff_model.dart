@@ -6,6 +6,7 @@ class StaffMember {
   final String email;
   final StaffPermission permission;
   final bool isActive;
+  final bool isApproved;
   final DateTime joinedDate;
   final String? shopId;
 
@@ -15,6 +16,7 @@ class StaffMember {
     required this.email,
     required this.permission,
     this.isActive = true,
+    this.isApproved = true,
     required this.joinedDate,
     this.shopId,
   });
@@ -25,6 +27,7 @@ class StaffMember {
     String? email,
     StaffPermission? permission,
     bool? isActive,
+    bool? isApproved,
     DateTime? joinedDate,
     String? shopId,
   }) {
@@ -34,6 +37,7 @@ class StaffMember {
       email: email ?? this.email,
       permission: permission ?? this.permission,
       isActive: isActive ?? this.isActive,
+      isApproved: isApproved ?? this.isApproved,
       joinedDate: joinedDate ?? this.joinedDate,
       shopId: shopId ?? this.shopId,
     );
@@ -45,6 +49,7 @@ class StaffMember {
       'email': email,
       'permission': permission.name,
       'isActive': isActive,
+      'isApproved': isApproved,
       'joinedDate': joinedDate.toIso8601String(),
       'shopId': shopId,
     };
@@ -64,6 +69,7 @@ class StaffMember {
       email: map['email'] as String? ?? '',
       permission: perm,
       isActive: map['isActive'] as bool? ?? true,
+      isApproved: map['isApproved'] as bool? ?? true,
       joinedDate: map['joinedDate'] != null
           ? DateTime.tryParse(map['joinedDate'] as String) ?? DateTime.now()
           : DateTime.now(),

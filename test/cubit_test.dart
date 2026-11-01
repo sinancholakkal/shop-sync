@@ -179,5 +179,68 @@ void main() {
       expect(find.text('ShopSync Admin'), findsOneWidget);
     });
   });
+
+  group('Option 1 + 2: Staff Approval Queue & Dynamic Rotating QR Tests', () {
+    test('Staff onboarding creates unapproved staff, owner can approve or reject', () {
+      final appState = AppStateProvider();
+      expect(appState.pendingStaffCount, 0);
+
+      // 1. Staff joins from dynamic QR
+      final staff = appState.addStaffMemberFromQR(
+        name: 'Jordan Brooks',
+        email: 'jordan@retail.io',
+      );
+
+      expect(staff.isApproved, isFalse);
+      expect(appState.pendingStaffCount, 1);
+      expect(appState.pendingStaffList.first.name, 'Jordan Brooks');
+
+      // 2. Owner approves staff with Stock Counting permission
+      appState.approveStaff(staff.id, StaffPermission.stockCounting);
+      expect(appState.pendingStaffCount, 0);
+      final approvedMember = appState.staffList.firstWhere((s) => s.id == staff.id);
+      expect(approvedMember.isApproved, isTrue);
+      expect(approvedMember.permission, StaffPermission.stockCounting);
+
+      // 3. Another staff joins and owner rejects
+      final staff2 = appState.addStaffMemberFromQR(
+        name: 'Malicious Applicant',
+        email: 'malicious@external.com',
+      );
+      expect(appState.pendingStaffCount, 1);
+      appState.rejectStaff(staff2.id);
+      expect(appState.pendingStaffCount, 0);
+      expect(appState.staffList.any((s) => s.id == staff2.id), isFalse);
+    });
+
+    test('ShopSyncCubit handles staff approval queue lifecycle correctly', () {
+      final cubit = ShopSyncCubit();
+      expect(cubit.state.staffList.where((s) => !s.isApproved).length, 0);
+
+      // 1. Staff joins
+      final staff = cubit.addStaffMemberFromQR(
+        name: 'Taylor Reed',
+        email: 'taylor@retail.io',
+      );
+      expect(staff.isApproved, isFalse);
+      expect(cubit.state.staffList.where((s) => !s.isApproved).length, 1);
+
+      // 2. Approve
+      cubit.approveStaff(staff.id, StaffPermission.fullAccess);
+      expect(cubit.state.staffList.where((s) => !s.isApproved).length, 0);
+      final approved = cubit.state.staffList.firstWhere((s) => s.id == staff.id);
+      expect(approved.isApproved, isTrue);
+      expect(approved.permission, StaffPermission.fullAccess);
+
+      // 3. Reject
+      final staff2 = cubit.addStaffMemberFromQR(
+        name: 'Unknown User',
+        email: 'unknown@web.io',
+      );
+      expect(cubit.state.staffList.where((s) => !s.isApproved).length, 1);
+      cubit.rejectStaff(staff2.id);
+      expect(cubit.state.staffList.where((s) => !s.isApproved).length, 0);
+    });
+  });
 }
 

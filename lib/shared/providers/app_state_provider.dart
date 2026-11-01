@@ -131,7 +131,15 @@ class AppStateProvider extends ChangeNotifier {
       _inventoryList.where((item) => item.isLowStock).length;
 
   int get activeStaffCount =>
-      _staffList.where((staff) => staff.isActive).length;
+      _staffList.where((staff) => staff.isActive && staff.isApproved).length;
+
+  List<StaffMember> get pendingStaffList =>
+      _staffList.where((s) => !s.isApproved).toList();
+
+  List<StaffMember> get approvedStaffList =>
+      _staffList.where((s) => s.isApproved).toList();
+
+  int get pendingStaffCount => pendingStaffList.length;
 
   // Auth Operations
   void loginAsOwner(String email, {String? shopId, String? shopName}) {
@@ -215,10 +223,38 @@ class AppStateProvider extends ChangeNotifier {
     }
   }
 
-  void addStaffMemberFromQR({
+  void approveStaff(String staffId, StaffPermission permission) {
+    final index = _staffList.indexWhere((s) => s.id == staffId);
+    if (index != -1) {
+      final updated = _staffList[index].copyWith(
+        isApproved: true,
+        isActive: true,
+        permission: permission,
+      );
+      _staffList[index] = updated;
+      if (_currentStaff?.id == staffId) {
+        _currentStaff = updated;
+      }
+      FirestoreService.instance.approveStaffMember(_shopId, staffId, permission);
+      notifyListeners();
+    }
+  }
+
+  void rejectStaff(String staffId) {
+    _staffList.removeWhere((s) => s.id == staffId);
+    if (_currentStaff?.id == staffId) {
+      _currentStaff = null;
+      _isAuthenticated = false;
+    }
+    FirestoreService.instance.rejectStaffMember(_shopId, staffId);
+    notifyListeners();
+  }
+
+  StaffMember addStaffMemberFromQR({
     required String name,
     required String email,
     StaffPermission permission = StaffPermission.stockCounting,
+    bool isApproved = false,
   }) {
     final newStaff = StaffMember(
       id: 'stf_${DateTime.now().millisecondsSinceEpoch}',
@@ -226,6 +262,7 @@ class AppStateProvider extends ChangeNotifier {
       email: email,
       permission: permission,
       isActive: true,
+      isApproved: isApproved,
       joinedDate: DateTime.now(),
       shopId: _shopId,
     );
@@ -236,6 +273,7 @@ class AppStateProvider extends ChangeNotifier {
 
     FirestoreService.instance.addStaffMember(_shopId, newStaff);
     notifyListeners();
+    return newStaff;
   }
 
   // Inventory Management Actions

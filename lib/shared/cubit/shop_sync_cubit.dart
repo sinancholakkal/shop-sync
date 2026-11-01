@@ -49,7 +49,15 @@ class ShopSyncState {
       inventoryList.where((item) => item.isLowStock).length;
 
   int get activeStaffCount =>
-      staffList.where((staff) => staff.isActive).length;
+      staffList.where((staff) => staff.isActive && staff.isApproved).length;
+
+  List<StaffMember> get pendingStaffList =>
+      staffList.where((s) => !s.isApproved).toList();
+
+  List<StaffMember> get approvedStaffList =>
+      staffList.where((s) => s.isApproved).toList();
+
+  int get pendingStaffCount => pendingStaffList.length;
 
   ShopSyncState copyWith({
     bool? isAuthenticated,
@@ -246,10 +254,55 @@ class ShopSyncCubit extends Cubit<ShopSyncState> {
     emit(state.copyWith(staffList: updatedList));
   }
 
-  void addStaffMemberFromQR({
+  void approveStaff(String staffId, StaffPermission permission) {
+    final updatedList = state.staffList.map((s) {
+      if (s.id == staffId) {
+        return s.copyWith(isApproved: true, isActive: true, permission: permission);
+      }
+      return s;
+    }).toList();
+
+    StaffMember? updatedCurrent = state.currentStaff;
+    if (updatedCurrent?.id == staffId) {
+      updatedCurrent = updatedCurrent?.copyWith(
+        isApproved: true,
+        isActive: true,
+        permission: permission,
+      );
+    }
+
+    FirestoreService.instance.approveStaffMember(state.shopId, staffId, permission);
+
+    emit(state.copyWith(
+      staffList: updatedList,
+      currentStaff: updatedCurrent,
+    ));
+  }
+
+  void rejectStaff(String staffId) {
+    final updatedList = state.staffList.where((s) => s.id != staffId).toList();
+    StaffMember? updatedCurrent = state.currentStaff;
+    bool auth = state.isAuthenticated;
+    if (updatedCurrent?.id == staffId) {
+      updatedCurrent = null;
+      auth = false;
+    }
+
+    FirestoreService.instance.rejectStaffMember(state.shopId, staffId);
+
+    emit(state.copyWith(
+      staffList: updatedList,
+      currentStaff: updatedCurrent,
+      isAuthenticated: auth,
+      clearCurrentStaff: updatedCurrent == null,
+    ));
+  }
+
+  StaffMember addStaffMemberFromQR({
     required String name,
     required String email,
     StaffPermission permission = StaffPermission.stockCounting,
+    bool isApproved = false,
   }) {
     final newStaff = StaffMember(
       id: 'stf_${DateTime.now().millisecondsSinceEpoch}',
@@ -257,6 +310,7 @@ class ShopSyncCubit extends Cubit<ShopSyncState> {
       email: email,
       permission: permission,
       isActive: true,
+      isApproved: isApproved,
       joinedDate: DateTime.now(),
       shopId: state.shopId,
     );
@@ -270,6 +324,7 @@ class ShopSyncCubit extends Cubit<ShopSyncState> {
       currentUserRole: UserRole.staff,
       isAuthenticated: true,
     ));
+    return newStaff;
   }
 
   void addInventoryItem(InventoryItem item) {

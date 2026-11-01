@@ -9,12 +9,14 @@ class PermissionAssignmentModal extends StatefulWidget {
   final StaffMember staff;
   final Function(StaffPermission) onSavePermission;
   final VoidCallback onToggleStatus;
+  final bool isApprovalMode;
 
   const PermissionAssignmentModal({
     super.key,
     required this.staff,
     required this.onSavePermission,
     required this.onToggleStatus,
+    this.isApprovalMode = false,
   });
 
   static Future<void> show(
@@ -22,6 +24,7 @@ class PermissionAssignmentModal extends StatefulWidget {
     required StaffMember staff,
     required Function(StaffPermission) onSavePermission,
     required VoidCallback onToggleStatus,
+    bool isApprovalMode = false,
   }) {
     return showDialog(
       context: context,
@@ -30,6 +33,7 @@ class PermissionAssignmentModal extends StatefulWidget {
         staff: staff,
         onSavePermission: onSavePermission,
         onToggleStatus: onToggleStatus,
+        isApprovalMode: isApprovalMode,
       ),
     );
   }
@@ -90,14 +94,16 @@ class _PermissionAssignmentModalState extends State<PermissionAssignmentModal> {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                 'Manage Staff Permissions',
-                                 style: GoogleFonts.outfit(
-                                   fontSize: 18,
-                                   fontWeight: FontWeight.bold,
-                                   color: isDark ? Colors.white : Colors.black87,
-                                 ),
-                                 overflow: TextOverflow.ellipsis,
-                               ),
+                                  widget.isApprovalMode
+                                      ? 'Approve Staff & Assign Role'
+                                      : 'Manage Staff Permissions',
+                                  style: GoogleFonts.outfit(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold,
+                                    color: isDark ? Colors.white : Colors.black87,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
                                Text(
                                  widget.staff.name,
                                  style: GoogleFonts.outfit(
@@ -173,34 +179,44 @@ class _PermissionAssignmentModalState extends State<PermissionAssignmentModal> {
                       ),
                       const SizedBox(width: 8),
                       GestureDetector(
-                        onTap: () {
-                          widget.onToggleStatus();
-                          Navigator.pop(context);
-                        },
+                        onTap: widget.isApprovalMode
+                            ? null
+                            : () {
+                                widget.onToggleStatus();
+                                Navigator.pop(context);
+                              },
                         child: Container(
                           padding: const EdgeInsets.symmetric(
                             horizontal: 10,
                             vertical: 5,
                           ),
                           decoration: BoxDecoration(
-                            color: widget.staff.isActive
-                                ? AppColors.accentEmerald.withValues(alpha: 0.15)
-                                : AppColors.accentRose.withValues(alpha: 0.15),
+                            color: widget.isApprovalMode || !widget.staff.isApproved
+                                ? Colors.amber.withValues(alpha: 0.15)
+                                : (widget.staff.isActive
+                                    ? AppColors.accentEmerald.withValues(alpha: 0.15)
+                                    : AppColors.accentRose.withValues(alpha: 0.15)),
                             borderRadius: BorderRadius.circular(8),
                             border: Border.all(
-                              color: widget.staff.isActive
-                                  ? AppColors.accentEmerald.withValues(alpha: 0.4)
-                                  : AppColors.accentRose.withValues(alpha: 0.4),
+                              color: widget.isApprovalMode || !widget.staff.isApproved
+                                  ? Colors.amber.withValues(alpha: 0.4)
+                                  : (widget.staff.isActive
+                                      ? AppColors.accentEmerald.withValues(alpha: 0.4)
+                                      : AppColors.accentRose.withValues(alpha: 0.4)),
                             ),
                           ),
                           child: Text(
-                            widget.staff.isActive ? 'Active' : 'Suspended',
+                            widget.isApprovalMode || !widget.staff.isApproved
+                                ? 'Pending Approval'
+                                : (widget.staff.isActive ? 'Active' : 'Suspended'),
                             style: GoogleFonts.outfit(
                               fontSize: 11,
                               fontWeight: FontWeight.bold,
-                              color: widget.staff.isActive
-                                  ? AppColors.accentEmerald
-                                  : AppColors.accentRose,
+                              color: widget.isApprovalMode || !widget.staff.isApproved
+                                  ? Colors.amber
+                                  : (widget.staff.isActive
+                                      ? AppColors.accentEmerald
+                                      : AppColors.accentRose),
                             ),
                             overflow: TextOverflow.ellipsis,
                           ),
@@ -270,7 +286,9 @@ class _PermissionAssignmentModalState extends State<PermissionAssignmentModal> {
                       const SizedBox(width: 8),
                       Flexible(
                         child: Text(
-                          'Apply Permission',
+                          widget.isApprovalMode
+                              ? 'Approve & Grant Access'
+                              : 'Apply Permission',
                           style: GoogleFonts.outfit(
                             fontSize: 15,
                             fontWeight: FontWeight.bold,
