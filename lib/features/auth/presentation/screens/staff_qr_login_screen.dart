@@ -1,5 +1,8 @@
+import 'dart:io' show Platform;
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:provider/provider.dart';
 import 'package:shop_sync_app/core/services/firestore_service.dart';
 import 'package:shop_sync_app/core/theme/app_theme.dart';
@@ -18,6 +21,20 @@ class _StaffQrLoginScreenState extends State<StaffQrLoginScreen>
     with SingleTickerProviderStateMixin {
   late AnimationController _animationController;
   late Animation<double> _scanAnimation;
+  MobileScannerController? _scannerController;
+  bool _isFlashOn = false;
+  bool _isFrontCamera = false;
+  bool _hasScanned = false;
+  bool _isProcessing = false;
+
+  bool get _isTesting {
+    if (kIsWeb) return false;
+    try {
+      return Platform.environment.containsKey('FLUTTER_TEST');
+    } catch (_) {
+      return false;
+    }
+  }
 
   @override
   void initState() {
@@ -30,12 +47,106 @@ class _StaffQrLoginScreenState extends State<StaffQrLoginScreen>
     _scanAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
       CurvedAnimation(parent: _animationController, curve: Curves.easeInOut),
     );
+
+    if (!_isTesting) {
+      _scannerController = MobileScannerController(
+        detectionSpeed: DetectionSpeed.normal,
+        facing: CameraFacing.back,
+        torchEnabled: false,
+      );
+    }
   }
 
   @override
   void dispose() {
     _animationController.dispose();
+    _scannerController?.dispose();
     super.dispose();
+  }
+
+  String _extractShopId(String raw) {
+    try {
+      final uri = Uri.tryParse(raw);
+      if (uri != null && uri.queryParameters.containsKey('shop')) {
+        return uri.queryParameters['shop']!;
+      }
+    } catch (_) {}
+    if (raw.contains('shop=')) {
+      final parts = raw.split('shop=');
+      if (parts.length > 1) {
+        return parts[1].split('&').first;
+      }
+    }
+    return raw.trim();
+  }
+
+  void _onDetect(BarcodeCapture capture) async {
+    if (_hasScanned || _isProcessing) return;
+    final barcodes = capture.barcodes;
+    for (final barcode in barcodes) {
+      final code = barcode.rawValue;
+      if (code != null && code.isNotEmpty) {
+        setState(() {
+          _hasScanned = true;
+          _isProcessing = true;
+        });
+        await _processScannedCode(code);
+        break;
+      }
+    }
+  }
+
+  Future<void> _processScannedCode(String rawCode) async {
+    final shopId = _extractShopId(rawCode);
+    final appState = Provider.of<AppStateProvider>(context, listen: false);
+    String resolvedName = 'Partner Retail Store';
+
+    try {
+      final shop = await FirestoreService.instance.getShop(shopId);
+      if (shop != null && shop['name'] != null) {
+        resolvedName = shop['name'] as String;
+      } else if (appState.shopId.toUpperCase() == shopId.toUpperCase()) {
+        resolvedName = appState.shopName;
+      }
+    } catch (_) {}
+
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        backgroundColor: AppColors.accentEmerald,
+        content: Row(
+          children: [
+            const Icon(Icons.check_circle_rounded, color: Colors.white),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                'Scanned: $resolvedName ($shopId)',
+                style: GoogleFonts.outfit(fontWeight: FontWeight.bold, color: Colors.white),
+              ),
+            ),
+          ],
+        ),
+        duration: const Duration(seconds: 2),
+      ),
+    );
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => StaffDetailsInputScreen(
+          scannedShopId: shopId,
+          shopName: resolvedName,
+        ),
+      ),
+    ).then((_) {
+      if (mounted) {
+        setState(() {
+          _hasScanned = false;
+          _isProcessing = false;
+        });
+      }
+    });
   }
 
   void _proceedWithScannedData() {
@@ -228,95 +339,201 @@ class _StaffQrLoginScreenState extends State<StaffQrLoginScreen>
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'Ask your shop owner to display their unique onboarding QR code on their dashboard.',
+                    'Scan the dynamic rotating QR code displayed on the shop owner\'s dashboard.',
                     textAlign: TextAlign.center,
                     style: GoogleFonts.outfit(
                       fontSize: 14,
                       color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
                     ),
                   ),
-                  const SizedBox(height: 32),
+                  const SizedBox(height: 28),
 
-                  // Scanner Viewport Box
+                  // Scanner Viewport Box with Live Camera Preview
                   Container(
                     width: 260,
                     height: 260,
                     decoration: BoxDecoration(
-                      color: isDark ? Colors.black45 : Colors.black.withValues(alpha: 0.05),
                       borderRadius: BorderRadius.circular(24),
                       border: Border.all(
-                        color: AppColors.secondary.withValues(alpha: 0.4),
+                        color: AppColors.secondary.withValues(alpha: 0.5),
                         width: 2,
                       ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: AppColors.secondary.withValues(alpha: 0.25),
+                          blurRadius: 18,
+                          offset: const Offset(0, 6),
+                        ),
+                      ],
                     ),
-                    child: Stack(
-                      children: [
-                        // Corner brackets
-                        Positioned(
-                          top: 12,
-                          left: 12,
-                          child: _CornerBracket(isTop: true, isLeft: true),
-                        ),
-                        Positioned(
-                          top: 12,
-                          right: 12,
-                          child: _CornerBracket(isTop: true, isLeft: false),
-                        ),
-                        Positioned(
-                          bottom: 12,
-                          left: 12,
-                          child: _CornerBracket(isTop: false, isLeft: true),
-                        ),
-                        Positioned(
-                          bottom: 12,
-                          right: 12,
-                          child: _CornerBracket(isTop: false, isLeft: false),
-                        ),
-
-                        // Center Icon
-                        Center(
-                          child: Icon(
-                            Icons.qr_code_2_rounded,
-                            size: 110,
-                            color: isDark ? Colors.white12 : Colors.black12,
-                          ),
-                        ),
-
-                        // Animated scanning laser line
-                        AnimatedBuilder(
-                          animation: _scanAnimation,
-                          builder: (context, child) {
-                            return Positioned(
-                              top: 20 + (220 * _scanAnimation.value),
-                              left: 20,
-                              right: 20,
-                              child: Container(
-                                height: 3,
-                                decoration: BoxDecoration(
-                                  gradient: const LinearGradient(
-                                    colors: [
-                                      Colors.transparent,
-                                      AppColors.secondary,
-                                      Colors.transparent,
-                                    ],
-                                  ),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: AppColors.secondary.withValues(alpha: 0.8),
-                                      blurRadius: 10,
-                                      spreadRadius: 2,
-                                    ),
-                                  ],
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(22),
+                      child: Stack(
+                        fit: StackFit.expand,
+                        children: [
+                          if (_isTesting)
+                            Container(
+                              color: isDark ? Colors.black45 : Colors.black12,
+                              child: Center(
+                                child: Icon(
+                                  Icons.qr_code_2_rounded,
+                                  size: 110,
+                                  color: isDark ? Colors.white12 : Colors.black12,
                                 ),
                               ),
-                            );
+                            )
+                          else
+                            MobileScanner(
+                              controller: _scannerController,
+                              onDetect: _onDetect,
+                              errorBuilder: (context, error) {
+                                return Container(
+                                  color: Colors.black87,
+                                  padding: const EdgeInsets.all(16),
+                                  child: Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      const Icon(
+                                        Icons.videocam_off_rounded,
+                                        color: Colors.amber,
+                                        size: 36,
+                                      ),
+                                      const SizedBox(height: 8),
+                                      Text(
+                                        'Camera Inactive / Denied',
+                                        textAlign: TextAlign.center,
+                                        style: GoogleFonts.outfit(
+                                          color: Colors.white,
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 6),
+                                      Text(
+                                        'Please allow camera permission or use manual ID entry below.',
+                                        textAlign: TextAlign.center,
+                                        style: GoogleFonts.outfit(
+                                          color: Colors.white70,
+                                          fontSize: 11,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              },
+                            ),
+
+                          // Animated scanning laser line
+                          AnimatedBuilder(
+                            animation: _scanAnimation,
+                            builder: (context, child) {
+                              return Positioned(
+                                top: 20 + (220 * _scanAnimation.value),
+                                left: 20,
+                                right: 20,
+                                child: Container(
+                                  height: 3,
+                                  decoration: BoxDecoration(
+                                    gradient: const LinearGradient(
+                                      colors: [
+                                        Colors.transparent,
+                                        AppColors.secondary,
+                                        Colors.transparent,
+                                      ],
+                                    ),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: AppColors.secondary.withValues(alpha: 0.8),
+                                        blurRadius: 10,
+                                        spreadRadius: 2,
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+
+                          // Corner brackets
+                          Positioned(
+                            top: 12,
+                            left: 12,
+                            child: _CornerBracket(isTop: true, isLeft: true),
+                          ),
+                          Positioned(
+                            top: 12,
+                            right: 12,
+                            child: _CornerBracket(isTop: true, isLeft: false),
+                          ),
+                          Positioned(
+                            bottom: 12,
+                            left: 12,
+                            child: _CornerBracket(isTop: false, isLeft: true),
+                          ),
+                          Positioned(
+                            bottom: 12,
+                            right: 12,
+                            child: _CornerBracket(isTop: false, isLeft: false),
+                          ),
+
+                          if (_isProcessing)
+                            Container(
+                              color: Colors.black54,
+                              child: const Center(
+                                child: CircularProgressIndicator(
+                                  color: AppColors.secondary,
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
+
+                  const SizedBox(height: 14),
+
+                  // Camera Control Actions (Flashlight & Camera Flip)
+                  if (!_isTesting) ...[
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        IconButton.filledTonal(
+                          style: IconButton.styleFrom(
+                            backgroundColor: isDark
+                                ? Colors.white.withValues(alpha: 0.08)
+                                : Colors.black.withValues(alpha: 0.05),
+                          ),
+                          tooltip: _isFlashOn ? 'Turn Flashlight Off' : 'Turn Flashlight On',
+                          icon: Icon(
+                            _isFlashOn ? Icons.flash_on_rounded : Icons.flash_off_rounded,
+                            size: 20,
+                            color: _isFlashOn ? Colors.amber : null,
+                          ),
+                          onPressed: () {
+                            _scannerController?.toggleTorch();
+                            setState(() => _isFlashOn = !_isFlashOn);
+                          },
+                        ),
+                        const SizedBox(width: 14),
+                        IconButton.filledTonal(
+                          style: IconButton.styleFrom(
+                            backgroundColor: isDark
+                                ? Colors.white.withValues(alpha: 0.08)
+                                : Colors.black.withValues(alpha: 0.05),
+                          ),
+                          tooltip: 'Switch Camera',
+                          icon: const Icon(Icons.flip_camera_ios_rounded, size: 20),
+                          onPressed: () {
+                            _scannerController?.switchCamera();
+                            setState(() => _isFrontCamera = !_isFrontCamera);
                           },
                         ),
                       ],
                     ),
-                  ),
-
-                  const SizedBox(height: 32),
+                    const SizedBox(height: 14),
+                  ] else ...[
+                    const SizedBox(height: 18),
+                  ],
 
                   GlowingGlassButton(
                     onPressed: _proceedWithScannedData,
@@ -339,6 +556,8 @@ class _StaffQrLoginScreenState extends State<StaffQrLoginScreen>
                       ],
                     ),
                   ),
+
+                  const SizedBox(height: 12),
 
                   Builder(
                     builder: (context) {

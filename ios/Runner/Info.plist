@@ -66,5 +66,7 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+	<key>NSCameraUsageDescription</key>
+	<string>ShopSync needs camera access to scan your shop owner's QR code for staff onboarding.</string>
 </dict>
 </plist>
