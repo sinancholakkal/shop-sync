@@ -1,6 +1,6 @@
 {
-    "name": "shop_sync_app",
-    "short_name": "shop_sync_app",
+    "name": "ShopSync - Retail & Inventory Management",
+    "short_name": "ShopSync",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",
