@@ -21,7 +21,7 @@ class StaffPendingApprovalScreen extends StatefulWidget {
     required this.staffId,
     required this.staffName,
     required this.shopName,
-    this.scannedShopId = 'SHOP-SYNC-8821',
+    this.scannedShopId = '',
   });
 
   @override

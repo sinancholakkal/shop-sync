@@ -105,13 +105,13 @@ class _StaffQrLoginScreenState extends State<StaffQrLoginScreen>
 
     final shopId = _extractShopId(rawCode);
     final appState = Provider.of<AppStateProvider>(context, listen: false);
-    String resolvedName = 'Partner Retail Store';
+    String resolvedName = 'Shop $shopId';
 
     try {
       final shop = await FirestoreService.instance.getShop(shopId);
       if (shop != null && shop['name'] != null) {
         resolvedName = shop['name'] as String;
-      } else if (appState.shopId.toUpperCase() == shopId.toUpperCase()) {
+      } else if (appState.shopId.toUpperCase() == shopId.toUpperCase() && appState.shopName.isNotEmpty) {
         resolvedName = appState.shopName;
       }
     } catch (_) {}
@@ -210,7 +210,7 @@ class _StaffQrLoginScreenState extends State<StaffQrLoginScreen>
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Ask your shop owner for their unique Shop ID code (e.g. SHOP-SYNC-8821).',
+                    'Ask your shop owner for their unique Shop ID code.',
                     style: GoogleFonts.outfit(
                       fontSize: 13,
                       color: isDark ? Colors.white70 : Colors.black87,
@@ -221,7 +221,7 @@ class _StaffQrLoginScreenState extends State<StaffQrLoginScreen>
                     controller: controller,
                     textCapitalization: TextCapitalization.characters,
                     decoration: const InputDecoration(
-                      hintText: 'e.g. SHOP-SYNC-8821',
+                      hintText: 'e.g. SHOP-SYNC-XXXX',
                       prefixIcon: Icon(Icons.store_rounded),
                     ),
                   ),
@@ -244,12 +244,16 @@ class _StaffQrLoginScreenState extends State<StaffQrLoginScreen>
                           if (code.isEmpty) return;
 
                           setDialogState(() => isChecking = true);
-                          String resolvedName = 'Partner Retail Store';
+                          final currentShopId = Provider.of<AppStateProvider>(context, listen: false).shopId;
+                          final currentShopName = Provider.of<AppStateProvider>(context, listen: false).shopName;
+                          String resolvedName = 'Shop $code';
 
                           try {
                             final shop = await FirestoreService.instance.getShop(code);
                             if (shop != null && shop['name'] != null) {
                               resolvedName = shop['name'] as String;
+                            } else if (currentShopId.toUpperCase() == code && currentShopName.isNotEmpty) {
+                              resolvedName = currentShopName;
                             }
                           } catch (_) {}
 

@@ -98,6 +98,12 @@ void main() {
       await tester.tap(find.text('Register Shop'));
       await tester.pumpAndSettle();
 
+      // Enter registration details
+      await tester.enterText(find.byType(TextField).at(0), 'Apex Retail');
+      await tester.enterText(find.byType(TextField).at(1), 'owner@apexretail.io');
+      await tester.enterText(find.byType(TextField).at(2), 'password123');
+      await tester.pumpAndSettle();
+
       // Ensure button is visible & tap Send Verification Link
       await tester.ensureVisible(find.text('Send Verification Link'));
       await tester.tap(find.text('Send Verification Link'));

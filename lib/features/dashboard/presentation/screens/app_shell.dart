@@ -7,7 +7,6 @@ import 'package:shop_sync_app/core/theme/app_theme.dart';
 import 'package:shop_sync_app/core/theme/theme_provider.dart';
 import 'package:shop_sync_app/core/widgets/glass_container.dart';
 import 'package:shop_sync_app/core/widgets/responsive_layout.dart';
-import 'package:shop_sync_app/features/auth/domain/models/user_role.dart';
 import 'package:shop_sync_app/features/auth/presentation/screens/owner_auth_screen.dart';
 import 'package:shop_sync_app/features/auth/presentation/screens/owner_dashboard_qr_screen.dart';
 import 'package:shop_sync_app/features/dashboard/presentation/cubit/nav_bar_cubit.dart';
@@ -63,7 +62,7 @@ class _AppShellState extends State<AppShell> {
     TransactionDashboardScreen(),
   ];
 
-  void _showRoleSwitcherDialog(BuildContext context, AppStateProvider appState) {
+  void _showAccountInfoDialog(BuildContext context, AppStateProvider appState) {
     showDialog(
       context: context,
       barrierColor: Colors.black.withValues(alpha: 0.65),
@@ -83,7 +82,7 @@ class _AppShellState extends State<AppShell> {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
-                        'Switch Active Demo Role',
+                        'Account Information',
                         style: GoogleFonts.outfit(
                           fontSize: 18,
                           fontWeight: FontWeight.bold,
@@ -95,70 +94,57 @@ class _AppShellState extends State<AppShell> {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 12),
-                  Text(
-                    'Experience the app interface and RBAC permissions from different perspectives:',
-                    style: GoogleFonts.outfit(fontSize: 13, color: Colors.grey),
-                  ),
                   const SizedBox(height: 16),
-                  _RoleOption(
-                    title: 'Shop Owner (Admin)',
-                    subtitle: 'Full admin rights, staff QR onboarding, staff permissions',
-                    isSelected: appState.isOwner,
-                    icon: Icons.admin_panel_settings_rounded,
-                    color: AppColors.primary,
-                    onTap: () {
-                      appState.switchDemoRole(UserRole.owner);
-                      Navigator.pop(context);
-                    },
+                  _buildAccountDetailRow('Role', appState.isOwner ? 'Shop Owner (Admin)' : 'Staff Member', Icons.verified_user_rounded, AppColors.primary),
+                  const SizedBox(height: 10),
+                  _buildAccountDetailRow('Shop Name', appState.shopName.isNotEmpty ? appState.shopName : 'My Shop', Icons.store_rounded, AppColors.secondary),
+                  const SizedBox(height: 10),
+                  _buildAccountDetailRow('Shop ID', appState.shopId.isNotEmpty ? appState.shopId : 'N/A', Icons.qr_code_rounded, AppColors.primaryLight),
+                  const SizedBox(height: 10),
+                  _buildAccountDetailRow(
+                    'Email',
+                    appState.isOwner ? appState.ownerEmail : (appState.currentStaff?.email ?? 'N/A'),
+                    Icons.email_outlined,
+                    AppColors.accentEmerald,
                   ),
                   const SizedBox(height: 10),
-                  _RoleOption(
-                    title: 'Staff (Full Access)',
-                    subtitle: 'Manage and update products, categories, and inventory',
-                    isSelected: !appState.isOwner &&
-                        appState.effectivePermission == StaffPermission.fullAccess,
-                    icon: Icons.shield_rounded,
-                    color: AppColors.accentPurple,
-                    onTap: () {
-                      appState.switchDemoRole(
-                          UserRole.staff, StaffPermission.fullAccess);
-                      Navigator.pop(context);
-                    },
-                  ),
-                  const SizedBox(height: 10),
-                  _RoleOption(
-                    title: 'Staff (Stock Counting)',
-                    subtitle: 'Update and adjust quantities only; cannot edit items',
-                    isSelected: !appState.isOwner &&
-                        appState.effectivePermission == StaffPermission.stockCounting,
-                    icon: Icons.inventory_2_rounded,
-                    color: AppColors.primaryLight,
-                    onTap: () {
-                      appState.switchDemoRole(
-                          UserRole.staff, StaffPermission.stockCounting);
-                      Navigator.pop(context);
-                    },
-                  ),
-                  const SizedBox(height: 10),
-                  _RoleOption(
-                    title: 'Staff (Read-Only)',
-                    subtitle: 'Browse stock and transactions with no modification rights',
-                    isSelected: !appState.isOwner &&
-                        appState.effectivePermission == StaffPermission.readOnly,
-                    icon: Icons.visibility_rounded,
-                    color: AppColors.secondary,
-                    onTap: () {
-                      appState.switchDemoRole(
-                          UserRole.staff, StaffPermission.readOnly);
-                      Navigator.pop(context);
-                    },
+                  _buildAccountDetailRow(
+                    'Permissions',
+                    appState.effectivePermission.title,
+                    Icons.shield_outlined,
+                    AppColors.accentPurple,
                   ),
                 ],
               ),
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildAccountDetailRow(String label, String value, IconData icon, Color color) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: color.withValues(alpha: 0.25)),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, color: color, size: 20),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(label, style: GoogleFonts.outfit(fontSize: 11, color: Colors.grey)),
+                Text(value, style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 13)),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -302,7 +288,7 @@ class _AppShellState extends State<AppShell> {
                           padding: const EdgeInsets.symmetric(
                               horizontal: 12, vertical: 10),
                           onTap: () =>
-                              _showRoleSwitcherDialog(context, appState),
+                              _showAccountInfoDialog(context, appState),
                           child: Row(
                             mainAxisAlignment: isDesktop
                                 ? MainAxisAlignment.start
@@ -486,10 +472,10 @@ class _AppShellState extends State<AppShell> {
                                       // Mobile Role Chip
                                       GestureDetector(
                                         onTap: () =>
-                                            _showRoleSwitcherDialog(context, appState),
+                                            _showAccountInfoDialog(context, appState),
                                         child: Container(
                                           padding: const EdgeInsets.symmetric(
-                                              horizontal: 6, vertical: 3),
+                                              horizontal: 8, vertical: 4),
                                           decoration: BoxDecoration(
                                             color: AppColors.primary
                                                 .withValues(alpha: 0.15),
@@ -499,15 +485,15 @@ class _AppShellState extends State<AppShell> {
                                             mainAxisSize: MainAxisSize.min,
                                             children: [
                                               Text(
-                                                appState.isOwner ? 'Owner' : 'Staff',
+                                                appState.isOwner ? 'Owner HQ' : 'Staff',
                                                 style: GoogleFonts.outfit(
                                                   fontSize: 10,
                                                   fontWeight: FontWeight.bold,
                                                   color: AppColors.primaryLight,
                                                 ),
                                               ),
-                                              const SizedBox(width: 2),
-                                              const Icon(Icons.swap_vert_rounded,
+                                              const SizedBox(width: 4),
+                                              const Icon(Icons.info_outline_rounded,
                                                   size: 13, color: AppColors.primaryLight),
                                             ],
                                           ),
@@ -870,84 +856,6 @@ class _SidebarNavItem extends StatelessWidget {
               ],
             ),
           ),
-        ),
-      ),
-    );
-  }
-}
-
-class _RoleOption extends StatelessWidget {
-  final String title;
-  final String subtitle;
-  final bool isSelected;
-  final IconData icon;
-  final Color color;
-  final VoidCallback onTap;
-
-  const _RoleOption({
-    required this.title,
-    required this.subtitle,
-    required this.isSelected,
-    required this.icon,
-    required this.color,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: isSelected
-              ? color.withValues(alpha: 0.18)
-              : (isDark
-                  ? Colors.white.withValues(alpha: 0.04)
-                  : Colors.black.withValues(alpha: 0.03)),
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(
-            color: isSelected ? color : (isDark ? Colors.white12 : Colors.black12),
-            width: isSelected ? 1.5 : 1.0,
-          ),
-        ),
-        child: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: color.withValues(alpha: 0.15),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Icon(icon, color: color, size: 20),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: GoogleFonts.outfit(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 13,
-                    ),
-                  ),
-                  Text(
-                    subtitle,
-                    style: GoogleFonts.outfit(
-                      fontSize: 11,
-                      color: isDark ? Colors.white60 : Colors.black54,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            if (isSelected)
-              Icon(Icons.check_circle_rounded, color: color, size: 18),
-          ],
         ),
       ),
     );

@@ -3,7 +3,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../core/services/firebase_auth_service.dart';
 import '../../core/services/firestore_service.dart';
-import '../../data/repositories/mock_data_repository.dart';
 import '../../features/auth/domain/models/user_role.dart';
 import '../../features/inventory/domain/models/inventory_item.dart';
 import '../../core/services/session_storage_service.dart';
@@ -22,11 +21,11 @@ class ShopSyncState {
   final List<ShopTransaction> transactionList;
 
   const ShopSyncState({
-    this.isAuthenticated = true,
+    this.isAuthenticated = false,
     this.currentUserRole = UserRole.owner,
-    this.ownerEmail = MockDataRepository.defaultOwnerEmail,
-    this.shopId = MockDataRepository.defaultShopId,
-    this.shopName = MockDataRepository.defaultShopName,
+    this.ownerEmail = '',
+    this.shopId = '',
+    this.shopName = '',
     this.currentStaff,
     this.staffList = const [],
     this.inventoryList = const [],
@@ -91,35 +90,22 @@ class ShopSyncCubit extends Cubit<ShopSyncState> {
   StreamSubscription<List<StaffMember>>? _staffSubscription;
   StreamSubscription<List<ShopTransaction>>? _transactionSubscription;
 
-  ShopSyncCubit({bool isAuthenticated = true})
+  ShopSyncCubit({bool isAuthenticated = false})
       : super(ShopSyncState(isAuthenticated: isAuthenticated)) {
-    initializeData();
-    if (isAuthenticated) {
+    if (isAuthenticated && state.shopId.isNotEmpty) {
       _bindFirestoreStreams(state.shopId);
     }
   }
 
-  void initializeData() {
-    final staff = MockDataRepository.getInitialStaff();
-    final inventory = MockDataRepository.getInitialInventory();
-    final transactions = MockDataRepository.getInitialTransactions();
-
-    emit(state.copyWith(
-      staffList: staff,
-      inventoryList: inventory,
-      transactionList: transactions,
-      currentStaff: staff.isNotEmpty ? staff.first : null,
-    ));
-  }
-
   void _bindFirestoreStreams(String targetShopId) {
     _cancelFirestoreStreams();
+    if (targetShopId.isEmpty) return;
 
     try {
       _inventorySubscription = FirestoreService.instance
           .streamInventory(targetShopId)
           .listen((items) {
-        if (items.isNotEmpty && !isClosed) {
+        if (!isClosed) {
           emit(state.copyWith(inventoryList: items));
         }
       }, onError: (e) {
@@ -129,17 +115,16 @@ class ShopSyncCubit extends Cubit<ShopSyncState> {
       _staffSubscription = FirestoreService.instance
           .streamStaff(targetShopId)
           .listen((staff) {
-        if (staff.isNotEmpty && !isClosed) {
+        if (!isClosed) {
           StaffMember? updatedCurrent = state.currentStaff;
           if (updatedCurrent != null) {
             final matching = staff.where((s) => s.id == updatedCurrent!.id);
-            if (matching.isNotEmpty) {
-              updatedCurrent = matching.first;
-            }
+            updatedCurrent = matching.isNotEmpty ? matching.first : null;
           }
           emit(state.copyWith(
             staffList: staff,
             currentStaff: updatedCurrent,
+            clearCurrentStaff: updatedCurrent == null,
           ));
         }
       }, onError: (e) {
@@ -149,7 +134,7 @@ class ShopSyncCubit extends Cubit<ShopSyncState> {
       _transactionSubscription = FirestoreService.instance
           .streamTransactions(targetShopId)
           .listen((txs) {
-        if (txs.isNotEmpty && !isClosed) {
+        if (!isClosed) {
           emit(state.copyWith(transactionList: txs));
         }
       }, onError: (e) {
@@ -210,19 +195,28 @@ class ShopSyncCubit extends Cubit<ShopSyncState> {
     _cancelFirestoreStreams();
     FirebaseAuthService.instance.signOut();
     SessionStorageService.instance.clearSession();
-    emit(state.copyWith(isAuthenticated: false));
+    emit(state.copyWith(
+      isAuthenticated: false,
+      ownerEmail: '',
+      shopId: '',
+      shopName: '',
+      clearCurrentStaff: true,
+      staffList: const [],
+      inventoryList: const [],
+      transactionList: const [],
+    ));
   }
 
   void switchDemoRole(UserRole role, [StaffPermission? permission]) {
     if (role == UserRole.staff) {
       final perm = permission ?? StaffPermission.fullAccess;
-      final found = state.staffList.firstWhere(
-        (s) => s.permission == perm,
-        orElse: () => state.staffList.first,
-      );
+      final matching = state.staffList.where((s) => s.permission == perm);
+      final StaffMember? found = matching.isNotEmpty
+          ? matching.first
+          : (state.staffList.isNotEmpty ? state.staffList.first : null);
       emit(state.copyWith(
         currentUserRole: role,
-        currentStaff: found.copyWith(permission: perm),
+        currentStaff: found?.copyWith(permission: perm),
       ));
     } else {
       emit(state.copyWith(

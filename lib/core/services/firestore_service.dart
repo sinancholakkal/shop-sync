@@ -1,6 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
-import '../../data/repositories/mock_data_repository.dart';
 import '../../features/auth/domain/models/user_role.dart';
 import '../../features/inventory/domain/models/inventory_item.dart';
 import '../../features/staff/domain/models/staff_model.dart';
@@ -38,8 +37,6 @@ class FirestoreService {
         'ownerEmail': ownerEmail,
         'createdAt': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
-
-      await seedInitialDataIfEmpty(shopId);
     } catch (e) {
       debugPrint('FirestoreService: createShop notice: $e');
     }
@@ -95,58 +92,14 @@ class FirestoreService {
     }
   }
 
-  // ----------------------------------------------------
-  // Auto-seed Demo Data for Newly Registered Shops
+// ----------------------------------------------------
+  // Clean Data Initialization (No Dummy Records)
   // ----------------------------------------------------
 
   Future<void> seedInitialDataIfEmpty(String shopId) async {
-    try {
-      final firestore = _firestore;
-      if (firestore == null) return;
-
-      final inventorySnapshot = await firestore
-          .collection('shops')
-          .doc(shopId)
-          .collection('inventory')
-          .limit(1)
-          .get();
-
-      if (inventorySnapshot.docs.isEmpty) {
-        final batch = firestore.batch();
-
-        for (final item in MockDataRepository.getInitialInventory()) {
-          final doc = firestore
-              .collection('shops')
-              .doc(shopId)
-              .collection('inventory')
-              .doc(item.id);
-          batch.set(doc, item.toMap());
-        }
-
-        for (final staff in MockDataRepository.getInitialStaff()) {
-          final doc = firestore
-              .collection('shops')
-              .doc(shopId)
-              .collection('staff')
-              .doc(staff.id);
-          batch.set(doc, staff.toMap());
-        }
-
-        for (final tx in MockDataRepository.getInitialTransactions()) {
-          final doc = firestore
-              .collection('shops')
-              .doc(shopId)
-              .collection('transactions')
-              .doc(tx.id);
-          batch.set(doc, tx.toMap());
-        }
-
-        await batch.commit();
-        debugPrint('FirestoreService: Initial demo catalog seeded successfully for shop $shopId');
-      }
-    } catch (e) {
-      debugPrint('FirestoreService: seedInitialDataIfEmpty notice: $e');
-    }
+    // Clean architecture: Never inject dummy or mock data.
+    // Real shops start with real records created by the store owner and staff.
+    return;
   }
 
   // ----------------------------------------------------

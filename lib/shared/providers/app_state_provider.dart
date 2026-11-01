@@ -2,7 +2,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../core/services/firebase_auth_service.dart';
 import '../../core/services/firestore_service.dart';
-import '../../data/repositories/mock_data_repository.dart';
 import '../../features/auth/domain/models/user_role.dart';
 import '../../features/inventory/domain/models/inventory_item.dart';
 import '../../core/services/session_storage_service.dart';
@@ -13,12 +12,12 @@ class AppStateProvider extends ChangeNotifier {
   // Authentication & Session
   bool _isAuthenticated;
   UserRole _currentUserRole = UserRole.owner;
-  String _ownerEmail = MockDataRepository.defaultOwnerEmail;
-  String _shopId = MockDataRepository.defaultShopId;
-  String _shopName = MockDataRepository.defaultShopName;
+  String _ownerEmail = '';
+  String _shopId = '';
+  String _shopName = '';
   StaffMember? _currentStaff;
 
-  // Domain Data Lists
+  // Domain Data Lists - Clean, real records (no dummy/mock data)
   List<StaffMember> _staffList = [];
   List<InventoryItem> _inventoryList = [];
   List<ShopTransaction> _transactionList = [];
@@ -31,32 +30,30 @@ class AppStateProvider extends ChangeNotifier {
   StreamSubscription<List<StaffMember>>? _staffSubscription;
   StreamSubscription<List<ShopTransaction>>? _transactionSubscription;
 
-  AppStateProvider({bool initialAuth = true}) : _isAuthenticated = initialAuth {
-    _initializeData();
-    if (_isAuthenticated) {
+  AppStateProvider({
+    bool initialAuth = false,
+    String? shopId,
+    String? shopName,
+    String? ownerEmail,
+  })  : _isAuthenticated = initialAuth,
+        _shopId = shopId ?? '',
+        _shopName = shopName ?? '',
+        _ownerEmail = ownerEmail ?? '' {
+    if (_isAuthenticated && _shopId.isNotEmpty) {
       _bindFirestoreStreams(_shopId);
     }
   }
 
-  void _initializeData() {
-    _staffList = MockDataRepository.getInitialStaff();
-    _inventoryList = MockDataRepository.getInitialInventory();
-    _transactionList = MockDataRepository.getInitialTransactions();
-    // Default current staff member for demo if switched to staff
-    _currentStaff = _staffList.first;
-  }
-
   void _bindFirestoreStreams(String targetShopId) {
     _cancelFirestoreStreams();
+    if (targetShopId.isEmpty) return;
 
     try {
       _inventorySubscription = FirestoreService.instance
           .streamInventory(targetShopId)
           .listen((items) {
-        if (items.isNotEmpty) {
-          _inventoryList = items;
-          notifyListeners();
-        }
+        _inventoryList = items;
+        notifyListeners();
       }, onError: (err) {
         debugPrint('AppStateProvider: Inventory stream error: $err');
       });
@@ -64,16 +61,12 @@ class AppStateProvider extends ChangeNotifier {
       _staffSubscription = FirestoreService.instance
           .streamStaff(targetShopId)
           .listen((staff) {
-        if (staff.isNotEmpty) {
-          _staffList = staff;
-          if (_currentStaff != null) {
-            final matching = staff.where((s) => s.id == _currentStaff!.id);
-            if (matching.isNotEmpty) {
-              _currentStaff = matching.first;
-            }
-          }
-          notifyListeners();
+        _staffList = staff;
+        if (_currentStaff != null) {
+          final matching = staff.where((s) => s.id == _currentStaff!.id);
+          _currentStaff = matching.isNotEmpty ? matching.first : null;
         }
+        notifyListeners();
       }, onError: (err) {
         debugPrint('AppStateProvider: Staff stream error: $err');
       });
@@ -81,10 +74,8 @@ class AppStateProvider extends ChangeNotifier {
       _transactionSubscription = FirestoreService.instance
           .streamTransactions(targetShopId)
           .listen((txs) {
-        if (txs.isNotEmpty) {
-          _transactionList = txs;
-          notifyListeners();
-        }
+        _transactionList = txs;
+        notifyListeners();
       }, onError: (err) {
         debugPrint('AppStateProvider: Transaction stream error: $err');
       });
@@ -191,7 +182,7 @@ class AppStateProvider extends ChangeNotifier {
         final profile = await FirestoreService.instance.getUserProfile(user.uid);
         final shopId = profile?['shopId'] as String? ??
             'SHOP-SYNC-${user.uid.length >= 6 ? user.uid.substring(0, 6).toUpperCase() : user.uid.toUpperCase()}';
-        final shopName = profile?['name'] as String? ?? 'Apex Retail & Tech Hub';
+        final shopName = profile?['name'] as String? ?? '';
         final roleStr = profile?['role'] as String? ?? 'owner';
 
         if (roleStr == 'staff') {
@@ -258,6 +249,14 @@ class AppStateProvider extends ChangeNotifier {
 
   void logout() {
     _isAuthenticated = false;
+    _currentUserRole = UserRole.owner;
+    _ownerEmail = '';
+    _shopId = '';
+    _shopName = '';
+    _currentStaff = null;
+    _staffList = [];
+    _inventoryList = [];
+    _transactionList = [];
     _cancelFirestoreStreams();
     FirebaseAuthService.instance.signOut();
     SessionStorageService.instance.clearSession();
@@ -269,16 +268,17 @@ class AppStateProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  // Demo Switcher: easily switch role / staff permission to test RBAC live!
+  // Safe role switcher for live RBAC preview
   void switchDemoRole(UserRole role, [StaffPermission? permission]) {
     _currentUserRole = role;
     if (role == UserRole.staff) {
       final perm = permission ?? StaffPermission.fullAccess;
-      final found = _staffList.firstWhere(
-        (s) => s.permission == perm,
-        orElse: () => _staffList.first,
-      );
-      _currentStaff = found.copyWith(permission: perm);
+      final matching = _staffList.where((s) => s.permission == perm);
+      if (matching.isNotEmpty) {
+        _currentStaff = matching.first;
+      } else if (_staffList.isNotEmpty) {
+        _currentStaff = _staffList.first.copyWith(permission: perm);
+      }
     } else {
       _currentStaff = null;
     }

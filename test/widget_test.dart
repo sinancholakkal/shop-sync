@@ -16,7 +16,7 @@ void main() {
       MultiProvider(
         providers: [
           ChangeNotifierProvider(create: (_) => ThemeProvider()),
-          ChangeNotifierProvider(create: (_) => AppStateProvider()),
+          ChangeNotifierProvider(create: (_) => AppStateProvider(initialAuth: true, shopName: 'My Retail Store')),
         ],
         child: const ShopSyncApp(),
       ),
@@ -24,7 +24,7 @@ void main() {
 
     await tester.pumpAndSettle();
 
-    expect(find.text('Apex Retail & Tech Hub'), findsWidgets);
+    expect(find.text('My Retail Store'), findsWidgets);
     expect(find.text('Quick Actions'), findsOneWidget);
     expect(find.text('Total Revenue'), findsWidgets);
   });
@@ -39,7 +39,7 @@ void main() {
       MultiProvider(
         providers: [
           ChangeNotifierProvider(create: (_) => ThemeProvider()),
-          ChangeNotifierProvider(create: (_) => AppStateProvider()),
+          ChangeNotifierProvider(create: (_) => AppStateProvider(initialAuth: true, shopName: 'My Retail Store')),
         ],
         child: const ShopSyncApp(),
       ),
@@ -48,6 +48,6 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('ShopSync'), findsWidgets);
-    expect(find.text('Apex Retail & Tech Hub'), findsWidgets);
+    expect(find.text('My Retail Store'), findsWidgets);
   });
 }

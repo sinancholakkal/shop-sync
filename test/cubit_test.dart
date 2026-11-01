@@ -9,6 +9,7 @@ import 'package:shop_sync_app/features/dashboard/presentation/cubit/nav_bar_cubi
 import 'package:shop_sync_app/features/inventory/domain/models/inventory_item.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shop_sync_app/core/services/session_storage_service.dart';
+import 'package:shop_sync_app/features/dashboard/presentation/screens/app_shell.dart';
 import 'package:shop_sync_app/features/staff/domain/models/staff_model.dart';
 import 'package:shop_sync_app/main.dart';
 import 'package:shop_sync_app/shared/cubit/shop_sync_cubit.dart';
@@ -49,14 +50,11 @@ void main() {
 
     test('ShopSyncCubit manages authentication, inventory and roles', () {
       final cubit = ShopSyncCubit();
+      expect(cubit.state.isAuthenticated, isFalse);
+
+      cubit.loginAsOwner('owner@test.com', shopId: 'SHOP-TEST-1', shopName: 'Test Shop');
       expect(cubit.state.isAuthenticated, isTrue);
       expect(cubit.state.isOwner, isTrue);
-      expect(cubit.state.inventoryList.isNotEmpty, isTrue);
-
-      // Switch to staff
-      cubit.switchDemoRole(UserRole.staff, StaffPermission.stockCounting);
-      expect(cubit.state.isOwner, isFalse);
-      expect(cubit.state.effectivePermission, StaffPermission.stockCounting);
 
       // Add item
       final initialCount = cubit.state.inventoryList.length;
@@ -96,14 +94,14 @@ void main() {
           providers: [
             BlocProvider(create: (_) => ThemeCubit()),
             BlocProvider(create: (_) => NavBarCubit()),
-            BlocProvider(create: (_) => ShopSyncCubit()),
+            BlocProvider(create: (_) => ShopSyncCubit(isAuthenticated: true)),
           ],
           child: MultiProvider(
             providers: [
               ChangeNotifierProvider(create: (_) => ThemeProvider()),
-              ChangeNotifierProvider(create: (_) => AppStateProvider()),
+              ChangeNotifierProvider(create: (_) => AppStateProvider(initialAuth: true, shopName: 'Test Shop')),
             ],
-            child: const ShopSyncApp(),
+            child: const ShopSyncApp(home: AppShell()),
           ),
         ),
       );
@@ -165,15 +163,15 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('ShopSync Admin'), findsOneWidget);
-      expect(find.text('Quick Demo Sign In (Skip OTP)'), findsOneWidget);
 
-      // 3. Perform Login
-      await tester.tap(find.text('Quick Demo Sign In (Skip OTP)'));
+      // 3. Perform Login with credentials
+      await tester.enterText(find.byType(TextField).at(0), 'owner@retailhub.com');
+      await tester.enterText(find.byType(TextField).at(1), 'password123');
+      await tester.tap(find.text('Sign In to Dashboard'));
       await tester.pumpAndSettle();
 
       // 4. Now inside Dashboard / AppShell
       expect(appState.isAuthenticated, isTrue);
-      expect(find.text('Apex Retail & Tech Hub'), findsWidgets);
       expect(find.text('Quick Actions'), findsOneWidget);
 
       // 5. Logout
