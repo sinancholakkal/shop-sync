@@ -388,6 +388,45 @@ void main() {
       expect(find.text('Mechanical Keyboard'), findsOneWidget);
       expect(find.text('Wireless Mouse'), findsNothing);
     });
+
+    test('Switch role is strictly restricted to Shop Owner / Admin', () {
+      // 1. Owner Login
+      final ownerState = AppStateProvider(initialAuth: false);
+      ownerState.loginAsOwner('owner@apex.io', shopId: 'SHOP-01', shopName: 'Apex Shop');
+      expect(ownerState.isRealOwner, isTrue);
+      expect(ownerState.isRolePreviewMode, isFalse);
+
+      // Owner switches to preview Stock Counting staff role
+      ownerState.switchDemoRole(UserRole.staff, StaffPermission.stockCounting);
+      expect(ownerState.isRolePreviewMode, isTrue);
+      expect(ownerState.currentUserRole, UserRole.staff);
+      expect(ownerState.effectivePermission, StaffPermission.stockCounting);
+
+      // Owner exits preview back to Owner HQ
+      ownerState.switchDemoRole(UserRole.owner);
+      expect(ownerState.isRolePreviewMode, isFalse);
+      expect(ownerState.isOwner, isTrue);
+
+      // 2. Staff Login
+      final staffState = AppStateProvider(initialAuth: false);
+      final staff = StaffMember(
+        id: 'stf_01',
+        name: 'Jane Staff',
+        email: 'jane@staff.io',
+        permission: StaffPermission.readOnly,
+        joinedDate: DateTime.now(),
+        shopId: 'SHOP-01',
+      );
+      staffState.loginAsStaff(staff, shopId: 'SHOP-01', shopName: 'Apex Shop');
+      expect(staffState.isRealOwner, isFalse);
+      expect(staffState.isRolePreviewMode, isFalse);
+
+      // Staff attempts to switch to Owner role -> Must be rejected / blocked
+      staffState.switchDemoRole(UserRole.owner);
+      expect(staffState.currentUserRole, UserRole.staff);
+      expect(staffState.isOwner, isFalse);
+      expect(staffState.effectivePermission, StaffPermission.readOnly);
+    });
   });
 }
 

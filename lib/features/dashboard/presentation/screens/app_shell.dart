@@ -7,6 +7,7 @@ import 'package:shop_sync_app/core/theme/app_theme.dart';
 import 'package:shop_sync_app/core/theme/theme_provider.dart';
 import 'package:shop_sync_app/core/widgets/glass_container.dart';
 import 'package:shop_sync_app/core/widgets/responsive_layout.dart';
+import 'package:shop_sync_app/features/auth/domain/models/user_role.dart';
 import 'package:shop_sync_app/features/auth/presentation/screens/owner_auth_screen.dart';
 import 'package:shop_sync_app/features/auth/presentation/screens/owner_dashboard_qr_screen.dart';
 import 'package:shop_sync_app/features/dashboard/presentation/cubit/nav_bar_cubit.dart';
@@ -114,10 +115,177 @@ class _AppShellState extends State<AppShell> {
                     Icons.shield_outlined,
                     AppColors.accentPurple,
                   ),
+
+                  // Staff Visibility Preview (Strictly for Shop Owner / Admin)
+                  if (appState.isRealOwner) ...[
+                    const SizedBox(height: 20),
+                    const Divider(height: 1),
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        const Icon(Icons.preview_rounded, size: 18, color: AppColors.accentAmber),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Staff Visibility Preview (Admin Only)',
+                          style: GoogleFonts.outfit(
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      'Preview the exact layout and permissions a staff member will see:',
+                      style: GoogleFonts.outfit(
+                        fontSize: 12,
+                        color: Colors.grey,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    _buildRoleOption(
+                      title: 'Shop Owner HQ (Full Admin)',
+                      description: 'Full administrative rights across inventory, staff, and transactions',
+                      icon: Icons.admin_panel_settings_rounded,
+                      color: AppColors.primary,
+                      isSelected: !appState.isRolePreviewMode,
+                      onTap: () {
+                        appState.switchDemoRole(UserRole.owner);
+                        Navigator.pop(context);
+                      },
+                    ),
+                    const SizedBox(height: 8),
+                    _buildRoleOption(
+                      title: 'Staff: Full Access',
+                      description: 'Can manage catalog and adjust stock. Cannot manage other staff',
+                      icon: Icons.verified_user_rounded,
+                      color: AppColors.accentEmerald,
+                      isSelected: appState.isRolePreviewMode &&
+                          appState.effectivePermission == StaffPermission.fullAccess,
+                      onTap: () {
+                        appState.switchDemoRole(UserRole.staff, StaffPermission.fullAccess);
+                        Navigator.pop(context);
+                      },
+                    ),
+                    const SizedBox(height: 8),
+                    _buildRoleOption(
+                      title: 'Staff: Stock Counting Only',
+                      description: 'Can only update stock quantities. Modifying items is locked',
+                      icon: Icons.inventory_2_rounded,
+                      color: AppColors.accentAmber,
+                      isSelected: appState.isRolePreviewMode &&
+                          appState.effectivePermission == StaffPermission.stockCounting,
+                      onTap: () {
+                        appState.switchDemoRole(UserRole.staff, StaffPermission.stockCounting);
+                        Navigator.pop(context);
+                      },
+                    ),
+                    const SizedBox(height: 8),
+                    _buildRoleOption(
+                      title: 'Staff: Read-Only Access',
+                      description: 'Can view shop catalog & sales. All modifications disabled',
+                      icon: Icons.visibility_rounded,
+                      color: AppColors.accentPurple,
+                      isSelected: appState.isRolePreviewMode &&
+                          appState.effectivePermission == StaffPermission.readOnly,
+                      onTap: () {
+                        appState.switchDemoRole(UserRole.staff, StaffPermission.readOnly);
+                        Navigator.pop(context);
+                      },
+                    ),
+                  ] else ...[
+                    const SizedBox(height: 16),
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: AppColors.primary.withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: AppColors.primary.withValues(alpha: 0.2)),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.lock_outline_rounded, size: 18, color: AppColors.primaryLight),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              'Permissions are managed by your Shop Owner. Staff cannot switch roles.',
+                              style: GoogleFonts.outfit(
+                                fontSize: 11.5,
+                                color: Colors.grey,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRoleOption({
+    required String title,
+    required String description,
+    required IconData icon,
+    required Color color,
+    required bool isSelected,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(14),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: isSelected ? color.withValues(alpha: 0.16) : Colors.transparent,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: isSelected ? color : Colors.white.withValues(alpha: 0.1),
+            width: isSelected ? 1.5 : 1,
+          ),
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.2),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(icon, color: color, size: 18),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: GoogleFonts.outfit(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 13,
+                      color: isSelected ? color : null,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    description,
+                    style: GoogleFonts.outfit(
+                      fontSize: 11,
+                      color: Colors.grey,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (isSelected)
+              Icon(Icons.check_circle_rounded, color: color, size: 18),
+          ],
         ),
       ),
     );
@@ -295,13 +463,17 @@ class _AppShellState extends State<AppShell> {
                                 : MainAxisAlignment.center,
                             children: [
                               Icon(
-                                appState.isOwner
+                                appState.isRealOwner && !appState.isRolePreviewMode
                                     ? Icons.admin_panel_settings_rounded
-                                    : Icons.badge_rounded,
+                                    : (appState.isRolePreviewMode
+                                        ? Icons.visibility_rounded
+                                        : Icons.badge_rounded),
                                 size: 18,
-                                color: appState.isOwner
+                                color: appState.isRealOwner && !appState.isRolePreviewMode
                                     ? AppColors.primaryLight
-                                    : AppColors.secondary,
+                                    : (appState.isRolePreviewMode
+                                        ? AppColors.accentAmber
+                                        : AppColors.secondary),
                               ),
                               if (isDesktop) ...[
                                 const SizedBox(width: 8),
@@ -311,17 +483,24 @@ class _AppShellState extends State<AppShell> {
                                         CrossAxisAlignment.start,
                                     children: [
                                       Text(
-                                        appState.isOwner
-                                            ? 'Owner View'
+                                        appState.isRealOwner
+                                            ? (appState.isRolePreviewMode
+                                                ? '👁️ Preview: ${appState.effectivePermission.title}'
+                                                : 'Shop Owner HQ')
                                             : 'Staff: ${appState.effectivePermission.title}',
                                         style: GoogleFonts.outfit(
                                           fontWeight: FontWeight.w600,
                                           fontSize: 12,
+                                          color: appState.isRolePreviewMode
+                                              ? AppColors.accentAmber
+                                              : null,
                                         ),
                                         overflow: TextOverflow.ellipsis,
                                       ),
                                       Text(
-                                        'Click to switch role',
+                                        appState.isRealOwner
+                                            ? 'Click to switch role preview'
+                                            : 'Assigned by Store Owner',
                                         style: GoogleFonts.outfit(
                                           fontSize: 10,
                                           color: isDark
@@ -332,7 +511,10 @@ class _AppShellState extends State<AppShell> {
                                     ],
                                   ),
                                 ),
-                                const Icon(Icons.swap_horiz_rounded, size: 16),
+                                if (appState.isRealOwner)
+                                  const Icon(Icons.swap_horiz_rounded, size: 16)
+                                else
+                                  const Icon(Icons.lock_outline_rounded, size: 14, color: Colors.grey),
                               ],
                             ],
                           ),
@@ -477,24 +659,40 @@ class _AppShellState extends State<AppShell> {
                                           padding: const EdgeInsets.symmetric(
                                               horizontal: 8, vertical: 4),
                                           decoration: BoxDecoration(
-                                            color: AppColors.primary
+                                            color: (appState.isRolePreviewMode
+                                                    ? AppColors.accentAmber
+                                                    : AppColors.primary)
                                                 .withValues(alpha: 0.15),
                                             borderRadius: BorderRadius.circular(8),
+                                            border: appState.isRolePreviewMode
+                                                ? Border.all(color: AppColors.accentAmber.withValues(alpha: 0.4))
+                                                : null,
                                           ),
                                           child: Row(
                                             mainAxisSize: MainAxisSize.min,
                                             children: [
                                               Text(
-                                                appState.isOwner ? 'Owner HQ' : 'Staff',
+                                                appState.isRealOwner
+                                                    ? (appState.isRolePreviewMode ? '👁️ Preview' : 'Owner HQ')
+                                                    : 'Staff',
                                                 style: GoogleFonts.outfit(
                                                   fontSize: 10,
                                                   fontWeight: FontWeight.bold,
-                                                  color: AppColors.primaryLight,
+                                                  color: appState.isRolePreviewMode
+                                                      ? AppColors.accentAmber
+                                                      : AppColors.primaryLight,
                                                 ),
                                               ),
                                               const SizedBox(width: 4),
-                                              const Icon(Icons.info_outline_rounded,
-                                                  size: 13, color: AppColors.primaryLight),
+                                              Icon(
+                                                appState.isRealOwner
+                                                    ? Icons.swap_horiz_rounded
+                                                    : Icons.info_outline_rounded,
+                                                size: 13,
+                                                color: appState.isRolePreviewMode
+                                                    ? AppColors.accentAmber
+                                                    : AppColors.primaryLight,
+                                              ),
                                             ],
                                           ),
                                         ),
@@ -528,6 +726,58 @@ class _AppShellState extends State<AppShell> {
                                 ],
                               ),
                             ),
+                          ),
+                        ),
+
+                      // Role Preview Banner when Shop Owner is testing as Staff
+                      if (appState.isRolePreviewMode)
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: AppColors.accentAmber.withValues(alpha: isDark ? 0.25 : 0.18),
+                            border: Border(
+                              bottom: BorderSide(
+                                color: AppColors.accentAmber.withValues(alpha: 0.5),
+                              ),
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.visibility_rounded, color: AppColors.accentAmber, size: 18),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Text(
+                                  'Owner Preview: Viewing as ${appState.effectivePermission.title}',
+                                  style: GoogleFonts.outfit(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 12,
+                                    color: isDark ? Colors.white : Colors.black87,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              InkWell(
+                                onTap: () => appState.switchDemoRole(UserRole.owner),
+                                borderRadius: BorderRadius.circular(8),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.accentAmber,
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Text(
+                                    'Exit Preview',
+                                    style: GoogleFonts.outfit(
+                                      color: Colors.black,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 11,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
                         ),
 

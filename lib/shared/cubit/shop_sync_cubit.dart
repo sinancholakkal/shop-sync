@@ -211,15 +211,27 @@ class ShopSyncCubit extends Cubit<ShopSyncState> {
   }
 
   void switchDemoRole(UserRole role, [StaffPermission? permission]) {
+    // Only shop owners can preview roles
+    if (state.ownerEmail.isEmpty) return;
+
     if (role == UserRole.staff) {
       final perm = permission ?? StaffPermission.fullAccess;
       final matching = state.staffList.where((s) => s.permission == perm);
-      final StaffMember? found = matching.isNotEmpty
+      final StaffMember found = matching.isNotEmpty
           ? matching.first
-          : (state.staffList.isNotEmpty ? state.staffList.first : null);
+          : StaffMember(
+              id: 'preview_staff_rbac',
+              name: 'Staff Preview (${perm.title})',
+              email: 'preview@staff.local',
+              permission: perm,
+              isActive: true,
+              isApproved: true,
+              joinedDate: DateTime.now(),
+              shopId: state.shopId,
+            );
       emit(state.copyWith(
         currentUserRole: role,
-        currentStaff: found?.copyWith(permission: perm),
+        currentStaff: found.copyWith(permission: perm),
       ));
     } else {
       emit(state.copyWith(

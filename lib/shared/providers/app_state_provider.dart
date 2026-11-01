@@ -111,6 +111,12 @@ class AppStateProvider extends ChangeNotifier {
   int get activeNavIndex => _activeNavIndex;
   String get inventoryFilterCategory => _inventoryFilterCategory;
 
+  /// Whether current session was authenticated as a Shop Owner / Admin
+  bool get isRealOwner => _ownerEmail.isNotEmpty;
+
+  /// Whether the Shop Owner is currently testing/previewing a Staff role
+  bool get isRolePreviewMode => isRealOwner && _currentUserRole == UserRole.staff;
+
   void setInventoryFilterCategory(String category) {
     _inventoryFilterCategory = category;
     notifyListeners();
@@ -279,16 +285,29 @@ class AppStateProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  // Safe role switcher for live RBAC preview
+  // Safe role switcher for Admin to preview Staff visibility (RBAC)
+  // Strictly restricted to Shop Owner / Admin
   void switchDemoRole(UserRole role, [StaffPermission? permission]) {
+    // Real staff members can NEVER switch roles or elevate permissions
+    if (!isRealOwner) return;
+
     _currentUserRole = role;
     if (role == UserRole.staff) {
       final perm = permission ?? StaffPermission.fullAccess;
       final matching = _staffList.where((s) => s.permission == perm);
       if (matching.isNotEmpty) {
         _currentStaff = matching.first;
-      } else if (_staffList.isNotEmpty) {
-        _currentStaff = _staffList.first.copyWith(permission: perm);
+      } else {
+        _currentStaff = StaffMember(
+          id: 'preview_staff_rbac',
+          name: 'Staff Preview (${perm.title})',
+          email: 'preview@staff.local',
+          permission: perm,
+          isActive: true,
+          isApproved: true,
+          joinedDate: DateTime.now(),
+          shopId: _shopId,
+        );
       }
     } else {
       _currentStaff = null;
