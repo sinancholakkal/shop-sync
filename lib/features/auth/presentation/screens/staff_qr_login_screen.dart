@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
+import 'package:shop_sync_app/core/services/firestore_service.dart';
 import 'package:shop_sync_app/core/theme/app_theme.dart';
 import 'package:shop_sync_app/core/widgets/glass_container.dart';
 import 'package:shop_sync_app/shared/providers/app_state_provider.dart';
@@ -47,6 +48,103 @@ class _StaffQrLoginScreenState extends State<StaffQrLoginScreen>
           shopName: appState.shopName,
         ),
       ),
+    );
+  }
+
+  void _openManualShopIdDialog() {
+    final controller = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        final isDark = Theme.of(ctx).brightness == Brightness.dark;
+        bool isChecking = false;
+
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              backgroundColor: isDark ? const Color(0xFF1E293B) : Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+              title: Text(
+                'Enter Shop ID Manually',
+                style: GoogleFonts.outfit(fontWeight: FontWeight.bold),
+              ),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Ask your shop owner for their unique Shop ID code (e.g. SHOP-SYNC-8821).',
+                    style: GoogleFonts.outfit(
+                      fontSize: 13,
+                      color: isDark ? Colors.white70 : Colors.black87,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: controller,
+                    textCapitalization: TextCapitalization.characters,
+                    decoration: const InputDecoration(
+                      hintText: 'e.g. SHOP-SYNC-8821',
+                      prefixIcon: Icon(Icons.store_rounded),
+                    ),
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('Cancel'),
+                ),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.secondary,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  onPressed: isChecking
+                      ? null
+                      : () async {
+                          final code = controller.text.trim().toUpperCase();
+                          if (code.isEmpty) return;
+
+                          setDialogState(() => isChecking = true);
+                          String resolvedName = 'Partner Retail Store';
+
+                          try {
+                            final shop = await FirestoreService.instance.getShop(code);
+                            if (shop != null && shop['name'] != null) {
+                              resolvedName = shop['name'] as String;
+                            }
+                          } catch (_) {}
+
+                          if (ctx.mounted && mounted) {
+                            Navigator.pop(ctx);
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => StaffDetailsInputScreen(
+                                  scannedShopId: code,
+                                  shopName: resolvedName,
+                                ),
+                              ),
+                            );
+                          }
+                        },
+                  child: isChecking
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                        )
+                      : Text(
+                          'Join Shop',
+                          style: GoogleFonts.outfit(fontWeight: FontWeight.bold, color: Colors.white),
+                        ),
+                ),
+              ],
+            );
+          },
+        );
+      },
     );
   }
 
@@ -242,7 +340,6 @@ class _StaffQrLoginScreenState extends State<StaffQrLoginScreen>
                     ),
                   ),
 
-                  const SizedBox(height: 14),
                   Builder(
                     builder: (context) {
                       final appState = Provider.of<AppStateProvider>(context);
@@ -256,6 +353,19 @@ class _StaffQrLoginScreenState extends State<StaffQrLoginScreen>
                         ),
                       );
                     },
+                  ),
+                  const SizedBox(height: 8),
+                  TextButton.icon(
+                    onPressed: _openManualShopIdDialog,
+                    icon: const Icon(Icons.keyboard_alt_outlined, size: 16, color: AppColors.secondary),
+                    label: Text(
+                      'Enter Shop ID Manually',
+                      style: GoogleFonts.outfit(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.secondary,
+                      ),
+                    ),
                   ),
                 ],
               ),
