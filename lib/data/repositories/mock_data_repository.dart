@@ -50,6 +50,16 @@ class MockDataRepository {
         joinedDate: DateTime.now().subtract(const Duration(days: 2)),
         shopId: defaultShopId,
       ),
+      StaffMember(
+        id: 'stf_05',
+        name: 'Maya Patel',
+        email: 'maya.p@apexretail.io',
+        permission: StaffPermission.inventoryManager,
+        isActive: true,
+        isApproved: true,
+        joinedDate: DateTime.now().subtract(const Duration(days: 12)),
+        shopId: defaultShopId,
+      ),
     ];
   }
 

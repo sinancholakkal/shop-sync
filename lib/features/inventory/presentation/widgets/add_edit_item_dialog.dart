@@ -1230,14 +1230,7 @@ class _AddEditItemDialogState extends State<AddEditItemDialog> {
                           costRestrictedNotice,
                           const SizedBox(height: 16),
                         ],
-                        Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Expanded(child: priceField),
-                            const SizedBox(width: 16),
-                            Expanded(child: wholesalePriceField),
-                          ],
-                        ),
+                        priceField,
                         if (canViewCost) ...[
                           const SizedBox(height: 16),
                           Column(
@@ -1249,6 +1242,8 @@ class _AddEditItemDialogState extends State<AddEditItemDialog> {
                             ],
                           ),
                         ],
+                        const SizedBox(height: 16),
+                        wholesalePriceField,
                         if (summaryBanner != null) ...[
                           const SizedBox(height: 12),
                           summaryBanner,

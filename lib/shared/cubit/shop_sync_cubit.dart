@@ -50,6 +50,9 @@ class ShopSyncState {
 
   /// Permission check for category management
   bool get canManageCategories => isOwner || effectivePermission.canModifyItems;
+  bool get canModifyItems => isOwner || effectivePermission.canModifyItems;
+  bool get canUpdateStockCount => isOwner || effectivePermission.canUpdateStockCount;
+  bool get canViewCostPrice => isOwner || effectivePermission.canViewCostPrice;
 
   int get maxCategories => maxCategoryLimit;
   bool get isCategoryLimitReached => allProductCategories.length >= maxCategoryLimit;

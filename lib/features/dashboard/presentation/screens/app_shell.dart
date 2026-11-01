@@ -325,6 +325,21 @@ class _AppShellState extends State<AppShell> {
                       ),
                       const SizedBox(height: 8),
                       _buildModernRoleCard(
+                        title: 'Staff: Item & Inventory Manager',
+                        badge: 'Add/Edit Items • No Cost/Margin',
+                        description: 'Can add, edit, delete items and manage counts. Cost price and profit margins are hidden.',
+                        icon: Icons.edit_note_rounded,
+                        color: AppColors.accentIndigo,
+                        isSelected: appState.isRolePreviewMode &&
+                            appState.effectivePermission == StaffPermission.inventoryManager,
+                        isDark: isDark,
+                        onTap: () {
+                          appState.switchDemoRole(UserRole.staff, StaffPermission.inventoryManager);
+                          Navigator.pop(context);
+                        },
+                      ),
+                      const SizedBox(height: 8),
+                      _buildModernRoleCard(
                         title: 'Staff: Stock Counting Only',
                         badge: 'Stock Count Only',
                         description: 'Can only update stock quantities (+ / -). Modifying items is locked.',

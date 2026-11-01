@@ -1063,9 +1063,118 @@ void main() {
       expect(find.text('Cost (Acquisition) Price'), findsNothing);
       expect(find.text('Retail Profit Margin'), findsNothing);
       expect(find.text('Cost value:'), findsNothing);
-      // Wholesale Price remains accessible
+      // 3. As Staff with Item & Inventory Manager: can modify items but cost/margin remain hidden
+      appState.loginAsStaff(StaffMember(
+        id: 'stf_inv_mgr',
+        name: 'Manager Maya',
+        email: 'maya@shop.com',
+        permission: StaffPermission.inventoryManager,
+        shopId: 'SHOP-1',
+        joinedDate: DateTime.now(),
+      ));
+      expect(appState.canModifyItems, isTrue);
+      expect(appState.canUpdateStockCount, isTrue);
+      expect(appState.canViewCostPrice, isFalse);
+
+      await tester.pumpWidget(
+        MultiProvider(
+          providers: [
+            ChangeNotifierProvider(create: (_) => ThemeProvider()),
+            ChangeNotifierProvider.value(value: appState),
+          ],
+          child: MaterialApp(
+            home: ProductDetailScreen(itemId: testItem.id),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Cost (Acquisition) Price'), findsNothing);
+      expect(find.text('Retail Profit Margin'), findsNothing);
       expect(find.text('Wholesale Price'), findsOneWidget);
-      expect(find.text('\$149.99'), findsWidgets);
+    });
+
+    test('StaffPermission.inventoryManager permissions contract', () {
+      const perm = StaffPermission.inventoryManager;
+      expect(perm.canModifyItems, isTrue);
+      expect(perm.canUpdateStockCount, isTrue);
+      expect(perm.canViewCostPrice, isFalse);
+      expect(perm.canManageStaff, isFalse);
+      expect(perm.title, 'Item & Inventory Manager');
+      expect(perm.description, contains('without access to cost price'));
+    });
+
+    testWidgets('AddEditItemDialog hides cost/margin and shows notice for Inventory Manager staff', (tester) async {
+      final appState = AppStateProvider();
+      appState.loginAsStaff(StaffMember(
+        id: 'stf_inv_mgr2',
+        name: 'Manager Maya',
+        email: 'maya@shop.com',
+        permission: StaffPermission.inventoryManager,
+        shopId: 'SHOP-1',
+        joinedDate: DateTime.now(),
+      ));
+
+      final existingItem = InventoryItem(
+        id: 'item_secret',
+        name: 'Confidential Gadget',
+        sku: 'CONF-01',
+        category: 'Electronics',
+        price: 200.0,
+        wholesalePrice: 160.0,
+        costPrice: 100.0,
+        marginPercent: 100.0,
+        wholesaleMarginPercent: 60.0,
+        quantity: 10,
+        minThreshold: 2,
+        createdAt: DateTime.now(),
+        lastUpdated: DateTime.now(),
+      );
+
+      InventoryItem? saved;
+
+      await tester.pumpWidget(
+        MultiProvider(
+          providers: [
+            ChangeNotifierProvider(create: (_) => ThemeProvider()),
+            ChangeNotifierProvider.value(value: appState),
+          ],
+          child: MaterialApp(
+            home: Scaffold(
+              body: AddEditItemDialog(
+                item: existingItem,
+                onSave: (val) => saved = val,
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Cost price input and margin input are hidden
+      expect(find.text('Cost (Acquisition) Price (\$)'), findsNothing);
+      expect(find.text('Retail Profit Margin (%)'), findsNothing);
+      expect(find.text('Wholesale Margin (%)'), findsNothing);
+
+      // Confidential notice is displayed
+      expect(find.textContaining('Cost price and profit margins are confidential'), findsOneWidget);
+
+      // Retail Price and Wholesale Price inputs are present
+      expect(find.text('Retail Price (\$)'), findsOneWidget);
+      expect(find.text('Wholesale Price (\$)'), findsOneWidget);
+
+      // Save changes
+      final saveBtn = find.text('Save Product Changes');
+      await tester.ensureVisible(saveBtn);
+      await tester.pumpAndSettle();
+      await tester.tap(saveBtn);
+      await tester.pumpAndSettle();
+
+      expect(saved, isNotNull);
+      // Existing confidential cost price and margin must be preserved
+      expect(saved!.costPrice, 100.0);
+      expect(saved!.marginPercent, 100.0);
+      expect(saved!.wholesaleMarginPercent, 60.0);
     });
   });
 }

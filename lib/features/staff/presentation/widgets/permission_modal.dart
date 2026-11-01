@@ -248,7 +248,20 @@ class _PermissionAssignmentModalState extends State<PermissionAssignmentModal> {
                 ),
                 const SizedBox(height: 10),
 
-                // Option 2: Stock Counting
+                // Option 2: Item & Inventory Manager (No Cost/Margin)
+                _PermissionOptionTile(
+                  title: StaffPermission.inventoryManager.title,
+                  description: StaffPermission.inventoryManager.description,
+                  icon: Icons.edit_note_rounded,
+                  iconColor: AppColors.accentIndigo,
+                  isSelected:
+                      _selectedPermission == StaffPermission.inventoryManager,
+                  onSelect: () => setState(
+                      () => _selectedPermission = StaffPermission.inventoryManager),
+                ),
+                const SizedBox(height: 10),
+
+                // Option 3: Stock Counting
                 _PermissionOptionTile(
                   title: StaffPermission.stockCounting.title,
                   description: StaffPermission.stockCounting.description,

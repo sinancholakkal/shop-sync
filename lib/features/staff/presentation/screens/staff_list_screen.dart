@@ -344,6 +344,8 @@ class _StaffCard extends StatelessWidget {
     switch (perm) {
       case StaffPermission.fullAccess:
         return AppColors.accentPurple;
+      case StaffPermission.inventoryManager:
+        return AppColors.accentIndigo;
       case StaffPermission.stockCounting:
         return AppColors.primaryLight;
       case StaffPermission.readOnly:
