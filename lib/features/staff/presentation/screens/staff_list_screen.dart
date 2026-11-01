@@ -37,8 +37,13 @@ class _StaffListScreenState extends State<StaffListScreen> {
       backgroundColor: Colors.transparent,
       body: SafeArea(
         bottom: false,
-        child: CustomScrollView(
-          slivers: [
+        child: RefreshIndicator(
+          color: AppColors.primary,
+          backgroundColor: isDark ? const Color(0xFF1E293B) : Colors.white,
+          onRefresh: () => appState.refreshAllData(),
+          child: CustomScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            slivers: [
             // Header & Actions
             SliverToBoxAdapter(
               child: Padding(
@@ -274,8 +279,9 @@ class _StaffListScreenState extends State<StaffListScreen> {
           ],
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 }
 
 class _StatChip extends StatelessWidget {

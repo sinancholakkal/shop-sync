@@ -23,8 +23,13 @@ class OwnerMainDashboard extends StatelessWidget {
       backgroundColor: Colors.transparent,
       body: SafeArea(
         bottom: false,
-        child: CustomScrollView(
-          slivers: [
+        child: RefreshIndicator(
+          color: AppColors.primary,
+          backgroundColor: isDark ? const Color(0xFF1E293B) : Colors.white,
+          onRefresh: () => appState.refreshAllData(),
+          child: CustomScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            slivers: [
             // Top Welcome & Shop Banner
             SliverToBoxAdapter(
               child: Padding(
@@ -448,8 +453,9 @@ class OwnerMainDashboard extends StatelessWidget {
           ],
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 }
 
 class _StatCard extends StatelessWidget {

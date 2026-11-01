@@ -101,6 +101,12 @@ class AppStateProvider extends ChangeNotifier {
     _transactionSubscription = null;
   }
 
+  Future<void> refreshAllData() async {
+    _bindFirestoreStreams(_shopId);
+    await Future.delayed(const Duration(milliseconds: 600));
+    notifyListeners();
+  }
+
   // Getters
   bool get isAuthenticated => _isAuthenticated;
   UserRole get currentUserRole => _currentUserRole;

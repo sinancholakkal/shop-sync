@@ -51,8 +51,13 @@ class _InventoryScreenState extends State<InventoryScreen> {
       backgroundColor: Colors.transparent,
       body: SafeArea(
         bottom: false,
-        child: CustomScrollView(
-          slivers: [
+        child: RefreshIndicator(
+          color: AppColors.primary,
+          backgroundColor: isDark ? const Color(0xFF1E293B) : Colors.white,
+          onRefresh: () => appState.refreshAllData(),
+          child: CustomScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            slivers: [
             // Header Bar
             SliverToBoxAdapter(
               child: Padding(
@@ -292,8 +297,9 @@ class _InventoryScreenState extends State<InventoryScreen> {
           ],
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 
   void _confirmDelete(BuildContext context, InventoryItem item, VoidCallback onConfirm) {
     showDialog(

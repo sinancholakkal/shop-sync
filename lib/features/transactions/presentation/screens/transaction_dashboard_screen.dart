@@ -141,8 +141,13 @@ class _TransactionDashboardScreenState
       backgroundColor: Colors.transparent,
       body: SafeArea(
         bottom: false,
-        child: CustomScrollView(
-          slivers: [
+        child: RefreshIndicator(
+          color: AppColors.primary,
+          backgroundColor: isDark ? const Color(0xFF1E293B) : Colors.white,
+          onRefresh: () => appState.refreshAllData(),
+          child: CustomScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            slivers: [
             // Header
             SliverToBoxAdapter(
               child: Padding(
@@ -308,8 +313,9 @@ class _TransactionDashboardScreenState
           ],
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 }
 
 class _MetricCard extends StatelessWidget {
