@@ -1,4 +1,3 @@
-import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
@@ -26,24 +25,18 @@ class _StaffDetailsInputScreenState extends State<StaffDetailsInputScreen> {
   // Start with clean, empty inputs so staff member fills in their real profile
   final _nameController = TextEditingController();
   final _emailController = TextEditingController();
-  final List<TextEditingController> _otpControllers =
-      List.generate(6, (_) => TextEditingController());
-
-  String _currentOtp = '582914';
-  bool _otpSent = false;
+  final _roleController = TextEditingController(text: 'Floor Staff / Cashier');
   bool _isLoading = false;
 
   @override
   void dispose() {
     _nameController.dispose();
     _emailController.dispose();
-    for (var c in _otpControllers) {
-      c.dispose();
-    }
+    _roleController.dispose();
     super.dispose();
   }
 
-  void _sendOtp() {
+  void _submitRegistration() {
     // If empty in tests or fast click, fallback so test doesn't stall
     if (_nameController.text.trim().isEmpty) {
       _nameController.text = 'Staff Member';
@@ -52,69 +45,8 @@ class _StaffDetailsInputScreenState extends State<StaffDetailsInputScreen> {
       _emailController.text = 'staff@apexretail.io';
     }
 
-    _currentOtp = (100000 + Random().nextInt(900000)).toString();
-
     setState(() => _isLoading = true);
-    Future.delayed(const Duration(milliseconds: 600), () {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-          _otpSent = true;
-          // Clear OTP controllers so staff types the actual code!
-          for (var c in _otpControllers) {
-            c.clear();
-          }
-        });
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            backgroundColor: AppColors.primary,
-            duration: const Duration(seconds: 8),
-            content: Row(
-              children: [
-                const Icon(Icons.mark_email_read_rounded, color: Colors.white),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Verification code sent to ${_emailController.text.trim()}',
-                        style: GoogleFonts.outfit(fontWeight: FontWeight.bold, color: Colors.white),
-                      ),
-                      Text(
-                        'Your 6-digit code is: $_currentOtp',
-                        style: GoogleFonts.outfit(color: Colors.white70, fontSize: 13),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      }
-    });
-  }
-
-  void _verifyAndJoinShop() {
-    final enteredOtp = _otpControllers.map((c) => c.text.trim()).join();
-    if (enteredOtp.isNotEmpty &&
-        enteredOtp != _currentOtp &&
-        enteredOtp != '123456' &&
-        enteredOtp != '582914') {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Incorrect OTP code. Please check and try again.'),
-          backgroundColor: AppColors.accentRose,
-        ),
-      );
-      return;
-    }
-
-    setState(() => _isLoading = true);
-    Future.delayed(const Duration(milliseconds: 600), () {
+    Future.delayed(const Duration(milliseconds: 500), () {
       if (mounted) {
         setState(() => _isLoading = false);
         final appState = Provider.of<AppStateProvider>(context, listen: false);
@@ -129,7 +61,7 @@ class _StaffDetailsInputScreenState extends State<StaffDetailsInputScreen> {
           );
         } catch (_) {}
 
-        // Navigate to the Pending Approval screen (Option 1)
+        // Navigate to the Pending Approval screen
         Navigator.of(context).pushReplacement(
           MaterialPageRoute(
             builder: (_) => StaffPendingApprovalScreen(
@@ -251,7 +183,7 @@ class _StaffDetailsInputScreenState extends State<StaffDetailsInputScreen> {
                   const SizedBox(height: 24),
 
                   Text(
-                    _otpSent ? 'Verify Staff Email' : 'Enter Staff Identity Details',
+                    'Enter Staff Identity Details',
                     textAlign: TextAlign.center,
                     style: GoogleFonts.outfit(
                       fontSize: 22,
@@ -261,9 +193,7 @@ class _StaffDetailsInputScreenState extends State<StaffDetailsInputScreen> {
                   ),
                   const SizedBox(height: 6),
                   Text(
-                    _otpSent
-                        ? 'We sent a 6-digit confirmation code to ${_emailController.text}'
-                        : 'Provide your profile information to finish linking with this shop.',
+                    'Provide your details to submit your onboarding application to the shop owner.',
                     textAlign: TextAlign.center,
                     style: GoogleFonts.outfit(
                       fontSize: 13,
@@ -273,190 +203,77 @@ class _StaffDetailsInputScreenState extends State<StaffDetailsInputScreen> {
 
                   const SizedBox(height: 24),
 
-                  if (!_otpSent) ...[
-                    Text(
-                      'Full Name',
-                      style: GoogleFonts.outfit(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                      ),
+                  Text(
+                    'Full Name',
+                    style: GoogleFonts.outfit(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
                     ),
-                    const SizedBox(height: 6),
-                    TextField(
-                      controller: _nameController,
-                      decoration: const InputDecoration(
-                        hintText: 'e.g. Jordan Brooks',
-                        prefixIcon: Icon(Icons.person_rounded),
-                      ),
+                  ),
+                  const SizedBox(height: 6),
+                  TextField(
+                    controller: _nameController,
+                    decoration: const InputDecoration(
+                      hintText: 'e.g. Jordan Brooks',
+                      prefixIcon: Icon(Icons.person_rounded),
                     ),
-                    const SizedBox(height: 16),
-                    Text(
-                      'Email Address',
-                      style: GoogleFonts.outfit(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                      ),
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Email Address',
+                    style: GoogleFonts.outfit(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
                     ),
-                    const SizedBox(height: 6),
-                    TextField(
-                      controller: _emailController,
-                      keyboardType: TextInputType.emailAddress,
-                      decoration: const InputDecoration(
-                        hintText: 'e.g. jordan.b@company.com',
-                        prefixIcon: Icon(Icons.alternate_email_rounded),
-                      ),
+                  ),
+                  const SizedBox(height: 6),
+                  TextField(
+                    controller: _emailController,
+                    keyboardType: TextInputType.emailAddress,
+                    decoration: const InputDecoration(
+                      hintText: 'e.g. jordan.b@company.com',
+                      prefixIcon: Icon(Icons.alternate_email_rounded),
                     ),
-                    const SizedBox(height: 24),
-                    GlowingGlassButton(
-                      isLoading: _isLoading,
-                      onPressed: _sendOtp,
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          const Icon(Icons.mark_email_read_rounded, color: Colors.white, size: 20),
-                          const SizedBox(width: 8),
-                          Flexible(
-                            child: Text(
-                              'Send Verification OTP',
-                              style: GoogleFonts.outfit(
-                                fontSize: 15,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.white,
-                              ),
-                              overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Requested Role / Department',
+                    style: GoogleFonts.outfit(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  TextField(
+                    controller: _roleController,
+                    decoration: const InputDecoration(
+                      hintText: 'e.g. Cashier / Floor Staff',
+                      prefixIcon: Icon(Icons.badge_rounded),
+                    ),
+                  ),
+                  const SizedBox(height: 28),
+                  GlowingGlassButton(
+                    isLoading: _isLoading,
+                    onPressed: _submitRegistration,
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(Icons.send_rounded, color: Colors.white, size: 20),
+                        const SizedBox(width: 8),
+                        Flexible(
+                          child: Text(
+                            'Submit for Owner Approval',
+                            style: GoogleFonts.outfit(
+                              fontSize: 15,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
                             ),
+                            overflow: TextOverflow.ellipsis,
                           ),
-                        ],
-                      ),
-                    ),
-                  ] else ...[
-                    // Prominent Code Display Chip
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                      margin: const EdgeInsets.only(bottom: 20),
-                      decoration: BoxDecoration(
-                        color: AppColors.primary.withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(14),
-                        border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
-                      ),
-                      child: Row(
-                        children: [
-                          const Icon(Icons.mark_email_read_rounded, size: 20, color: AppColors.primaryLight),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'Verification Code: $_currentOtp',
-                                  style: GoogleFonts.outfit(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.bold,
-                                    color: isDark ? Colors.white : Colors.black87,
-                                  ),
-                                ),
-                                Text(
-                                  'Enter this 6-digit code below to submit registration.',
-                                  style: GoogleFonts.outfit(
-                                    fontSize: 11,
-                                    color: isDark ? Colors.white70 : Colors.black54,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          TextButton(
-                            style: TextButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                              visualDensity: VisualDensity.compact,
-                            ),
-                            onPressed: () {
-                              for (int i = 0; i < 6 && i < _currentOtp.length; i++) {
-                                _otpControllers[i].text = _currentOtp[i];
-                              }
-                            },
-                            child: Text(
-                              'Auto Fill',
-                              style: GoogleFonts.outfit(
-                                fontSize: 12,
-                                fontWeight: FontWeight.bold,
-                                color: AppColors.primaryLight,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-
-                    // OTP Box Layout
-                    Row(
-                      children: List.generate(6, (index) {
-                        return Expanded(
-                          child: Container(
-                            margin: EdgeInsets.only(
-                              right: index < 5 ? 8 : 0,
-                            ),
-                            height: 52,
-                            child: TextField(
-                              controller: _otpControllers[index],
-                              textAlign: TextAlign.center,
-                              keyboardType: TextInputType.number,
-                              maxLength: 1,
-                              style: GoogleFonts.outfit(
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
-                              ),
-                              decoration: const InputDecoration(
-                                counterText: '',
-                                contentPadding: EdgeInsets.zero,
-                              ),
-                              onChanged: (value) {
-                                if (value.isNotEmpty && index < 5) {
-                                  FocusScope.of(context).nextFocus();
-                                } else if (value.isEmpty && index > 0) {
-                                  FocusScope.of(context).previousFocus();
-                                }
-                              },
-                            ),
-                          ),
-                        );
-                      }),
-                    ),
-                    const SizedBox(height: 24),
-                    GlowingGlassButton(
-                      isLoading: _isLoading,
-                      onPressed: _verifyAndJoinShop,
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          const Icon(Icons.check_circle_outline_rounded, color: Colors.white, size: 20),
-                          const SizedBox(width: 8),
-                          Flexible(
-                            child: Text(
-                              'Verify & Complete Onboarding',
-                              style: GoogleFonts.outfit(
-                                fontSize: 15,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.white,
-                              ),
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    TextButton(
-                      onPressed: () => setState(() => _otpSent = false),
-                      child: Text(
-                        'Change Name or Email',
-                        style: GoogleFonts.outfit(
-                          fontSize: 13,
-                          color: AppColors.primaryLight,
                         ),
-                      ),
+                      ],
                     ),
-                  ],
+                  ),
                 ],
               ),
             ),

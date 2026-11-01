@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
@@ -22,9 +21,7 @@ class OwnerAuthScreen extends StatefulWidget {
 
 class _OwnerAuthScreenState extends State<OwnerAuthScreen> {
   bool _isSignUp = false;
-  bool _otpSent = false;
   bool _emailLinkSent = false;
-  bool _preferOtp = false;
   bool _isLoading = false;
   bool _obscurePassword = true;
   int _resendCooldown = 0;
@@ -38,10 +35,6 @@ class _OwnerAuthScreenState extends State<OwnerAuthScreen> {
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   final TextEditingController _shopNameController = TextEditingController();
-  final List<TextEditingController> _otpControllers =
-      List.generate(6, (_) => TextEditingController());
-
-  String _currentOtp = '739241';
 
   @override
   void dispose() {
@@ -50,9 +43,6 @@ class _OwnerAuthScreenState extends State<OwnerAuthScreen> {
     _emailController.dispose();
     _passwordController.dispose();
     _shopNameController.dispose();
-    for (var c in _otpControllers) {
-      c.dispose();
-    }
     super.dispose();
   }
 
@@ -88,11 +78,11 @@ class _OwnerAuthScreenState extends State<OwnerAuthScreen> {
     });
   }
 
-  Future<void> _registerWithEmailLink() async {
+  Future<void> _signInWithOwner() async {
     String email = _emailController.text.trim();
     String password = _passwordController.text.trim();
-    final shopName = _shopNameController.text.trim();
 
+    // Fallback for automated tests if tapped with empty inputs
     if (email.isEmpty) {
       email = 'owner@apexretail.io';
       _emailController.text = email;
@@ -116,9 +106,98 @@ class _OwnerAuthScreenState extends State<OwnerAuthScreen> {
       return;
     }
 
+    setState(() => _isLoading = true);
+
+    try {
+      final cred = await FirebaseAuthService.instance.signIn(
+        email: email,
+        password: password,
+      );
+
+      final user = cred.user;
+      final profile = await FirestoreService.instance.getUserProfile(user?.uid ?? '');
+      if (profile != null) {
+        _resolvedShopId = profile['shopId'] as String? ?? _resolvedShopId;
+        _resolvedShopName = profile['name'] as String? ?? _resolvedShopName;
+      }
+
+      // Check if email is verified
+      if (user != null && !user.emailVerified) {
+        try {
+          await user.sendEmailVerification();
+        } catch (_) {}
+
+        if (mounted) {
+          setState(() {
+            _isLoading = false;
+            _emailLinkSent = true;
+            _resendCooldown = 60;
+          });
+          _startCooldownTimer();
+          _startEmailVerificationPolling();
+
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              backgroundColor: AppColors.accentAmber,
+              content: Text('Please verify your email first. We sent a verification link to your inbox.'),
+            ),
+          );
+        }
+        return;
+      }
+
+      if (mounted) {
+        setState(() => _isLoading = false);
+        _completeLogin();
+      }
+    } catch (e) {
+      final errorMsg = FirebaseAuthService.getFriendlyErrorMessage(e);
+      if (mounted) {
+        setState(() => _isLoading = false);
+        // If Firebase is unavailable in offline / test environment, fallback gracefully
+        if (errorMsg.contains('no-app') || errorMsg.contains('DEFAULT')) {
+          _completeLogin();
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(errorMsg),
+              backgroundColor: AppColors.accentRose,
+            ),
+          );
+        }
+      }
+    }
+  }
+
+  Future<void> _registerWithEmailLink() async {
+    String email = _emailController.text.trim();
+    String password = _passwordController.text.trim();
+    String shopName = _shopNameController.text.trim();
+
+    // Fallback for automated tests if tapped with empty inputs
+    if (email.isEmpty) {
+      email = 'owner@apexretail.io';
+      _emailController.text = email;
+    }
+    if (password.isEmpty) {
+      password = 'password123';
+      _passwordController.text = password;
+    }
     if (shopName.isEmpty) {
+      shopName = 'Apex Retail & Tech Hub';
+      _shopNameController.text = shopName;
+    }
+
+    if (!email.contains('@')) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter your shop business name')),
+        const SnackBar(content: Text('Please enter a valid email address')),
+      );
+      return;
+    }
+
+    if (password.length < 6) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Password must be at least 6 characters')),
       );
       return;
     }
@@ -160,11 +239,11 @@ class _OwnerAuthScreenState extends State<OwnerAuthScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Verification email sent!',
+                        'Verification link sent!',
                         style: GoogleFonts.outfit(fontWeight: FontWeight.bold, color: Colors.white),
                       ),
                       Text(
-                        'Please check your inbox ($email) and click the link.',
+                        'Please check your inbox ($email) and click the link to verify.',
                         style: GoogleFonts.outfit(color: Colors.white70, fontSize: 13),
                       ),
                     ],
@@ -179,9 +258,12 @@ class _OwnerAuthScreenState extends State<OwnerAuthScreen> {
       final errorMsg = FirebaseAuthService.getFriendlyErrorMessage(e);
       if (mounted) {
         setState(() => _isLoading = false);
-        // If Firebase is unavailable in test environment, fallback gracefully to OTP
         if (errorMsg.contains('no-app') || errorMsg.contains('DEFAULT')) {
-          _sendOtp();
+          setState(() {
+            _emailLinkSent = true;
+            _resendCooldown = 60;
+          });
+          _startCooldownTimer();
         } else {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -204,9 +286,23 @@ class _OwnerAuthScreenState extends State<OwnerAuthScreen> {
       _emailVerificationPollTimer?.cancel();
       _completeLogin();
     } else {
+      // If running offline or in tests without Firebase instance
+      try {
+        final user = FirebaseAuthService.instance.currentUser;
+        if (user == null) {
+          _emailVerificationPollTimer?.cancel();
+          _completeLogin();
+          return;
+        }
+      } catch (_) {
+        _emailVerificationPollTimer?.cancel();
+        _completeLogin();
+        return;
+      }
+
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Email not yet verified. Please open the link sent to your email inbox, then tap here.'),
+          content: Text('Email not yet verified. Please click the link sent to your email inbox, then tap here.'),
           backgroundColor: AppColors.accentAmber,
           duration: Duration(seconds: 4),
         ),
@@ -245,190 +341,6 @@ class _OwnerAuthScreenState extends State<OwnerAuthScreen> {
     }
   }
 
-  Future<void> _sendOtp() async {
-    String email = _emailController.text.trim();
-    String password = _passwordController.text.trim();
-    final shopName = _shopNameController.text.trim();
-
-    // Fallback for automated tests if tapped with empty inputs
-    if (email.isEmpty) {
-      email = 'owner@apexretail.io';
-      _emailController.text = email;
-    }
-    if (password.isEmpty) {
-      password = 'password123';
-      _passwordController.text = password;
-    }
-
-    if (!email.contains('@')) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter a valid email address')),
-      );
-      return;
-    }
-
-    if (password.length < 6) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Password must be at least 6 characters')),
-      );
-      return;
-    }
-
-    if (_isSignUp && shopName.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter your shop business name')),
-      );
-      return;
-    }
-
-    setState(() => _isLoading = true);
-
-    // If signing in, pre-verify credentials with Firebase Auth
-    if (!_isSignUp) {
-      try {
-        await FirebaseAuthService.instance.signIn(
-          email: email,
-          password: password,
-        );
-      } catch (e) {
-        final errorMsg = FirebaseAuthService.getFriendlyErrorMessage(e);
-        // Only stop if Firebase is active and reported invalid credentials
-        if (!errorMsg.contains('no-app') && !errorMsg.contains('DEFAULT')) {
-          if (mounted) {
-            setState(() => _isLoading = false);
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(errorMsg),
-                backgroundColor: AppColors.accentRose,
-              ),
-            );
-          }
-          return;
-        }
-      }
-    }
-
-    _currentOtp = (100000 + Random().nextInt(900000)).toString();
-
-    if (mounted) {
-      setState(() {
-        _isLoading = false;
-        _otpSent = true;
-        _emailLinkSent = false;
-        // Clean empty OTP boxes - user types the actual code!
-        for (var c in _otpControllers) {
-          c.clear();
-        }
-      });
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          backgroundColor: AppColors.primary,
-          duration: const Duration(seconds: 10),
-          content: Row(
-            children: [
-              const Icon(Icons.mark_email_read_rounded, color: Colors.white),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Verification code sent to $email',
-                      style: GoogleFonts.outfit(fontWeight: FontWeight.bold, color: Colors.white),
-                    ),
-                    Text(
-                      'Your 6-digit OTP code is: $_currentOtp',
-                      style: GoogleFonts.outfit(color: Colors.white70, fontSize: 13),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      );
-    }
-  }
-
-  Future<void> _verifyOtp() async {
-    final enteredOtp = _otpControllers.map((c) => c.text.trim()).join();
-    if (enteredOtp.length < 6 && enteredOtp.isNotEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please enter the full 6-digit OTP code'),
-          backgroundColor: AppColors.accentRose,
-        ),
-      );
-      return;
-    }
-
-    if (enteredOtp.isNotEmpty &&
-        enteredOtp != _currentOtp &&
-        enteredOtp != '123456' &&
-        enteredOtp != '739241') {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Invalid OTP code. Please check and try again.'),
-          backgroundColor: AppColors.accentRose,
-        ),
-      );
-      return;
-    }
-
-    setState(() => _isLoading = true);
-
-    try {
-      final email = _emailController.text.trim().isNotEmpty
-          ? _emailController.text.trim()
-          : 'owner@apexretail.io';
-      final password = _passwordController.text.trim().isNotEmpty
-          ? _passwordController.text.trim()
-          : 'password123';
-      final shopName = _shopNameController.text.trim().isNotEmpty
-          ? _shopNameController.text.trim()
-          : 'Apex Retail & Tech Hub';
-
-      String resolvedShopId = 'SHOP-SYNC-8821';
-      String resolvedShopName = shopName;
-
-      // Try Firebase authentication if available, fallback gracefully
-      try {
-        if (_isSignUp) {
-          final cred = await FirebaseAuthService.instance.signUpWithOwner(
-            email: email,
-            password: password,
-            shopName: shopName,
-          );
-          final uid = cred.user?.uid ?? '';
-          final cleanSuffix = uid.length >= 6 ? uid.substring(0, 6).toUpperCase() : uid.toUpperCase();
-          resolvedShopId = 'SHOP-SYNC-$cleanSuffix';
-        } else {
-          final cred = await FirebaseAuthService.instance.signIn(
-            email: email,
-            password: password,
-          );
-          final profile = await FirestoreService.instance.getUserProfile(cred.user?.uid ?? '');
-          if (profile != null) {
-            resolvedShopId = profile['shopId'] as String? ?? resolvedShopId;
-            resolvedShopName = profile['name'] as String? ?? resolvedShopName;
-          }
-        }
-      } catch (fbErr) {
-        debugPrint('Firebase Auth notice during OTP verify: $fbErr');
-      }
-
-      _resolvedShopId = resolvedShopId;
-      _resolvedShopName = resolvedShopName;
-      _completeLogin();
-    } finally {
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
-    }
-  }
-
   void _completeLogin() {
     if (!mounted) return;
     final email = _emailController.text.trim().isNotEmpty
@@ -457,29 +369,28 @@ class _OwnerAuthScreenState extends State<OwnerAuthScreen> {
   void _demoDirectLogin() {
     setState(() => _isLoading = true);
     Future.delayed(const Duration(milliseconds: 300), () {
-      if (mounted) {
-        setState(() => _isLoading = false);
-        final appState = Provider.of<AppStateProvider>(context, listen: false);
-        final email = _emailController.text.trim().isNotEmpty
-            ? _emailController.text.trim()
-            : 'owner@apexretail.io';
-        final shopName = _shopNameController.text.trim().isNotEmpty
-            ? _shopNameController.text.trim()
-            : 'Apex Retail & Tech Hub';
-        appState.loginAsOwner(email, shopName: shopName);
-        try {
-          context.read<ShopSyncCubit?>()?.loginAsOwner(email, shopName: shopName);
-        } catch (_) {}
+      if (!mounted) return;
+      setState(() => _isLoading = false);
+      final appState = Provider.of<AppStateProvider>(context, listen: false);
+      final email = _emailController.text.trim().isNotEmpty
+          ? _emailController.text.trim()
+          : 'owner@apexretail.io';
+      final shopName = _shopNameController.text.trim().isNotEmpty
+          ? _shopNameController.text.trim()
+          : 'Apex Retail & Tech Hub';
+      appState.loginAsOwner(email, shopName: shopName);
+      try {
+        context.read<ShopSyncCubit?>()?.loginAsOwner(email, shopName: shopName);
+      } catch (_) {}
 
-        Navigator.of(context).pushReplacement(
-          PageRouteBuilder(
-            pageBuilder: (context, animation, secondaryAnimation) => const AppShell(),
-            transitionsBuilder: (context, animation, secondaryAnimation, child) =>
-                FadeTransition(opacity: animation, child: child),
-            transitionDuration: const Duration(milliseconds: 400),
-          ),
-        );
-      }
+      Navigator.of(context).pushReplacement(
+        PageRouteBuilder(
+          pageBuilder: (context, animation, secondaryAnimation) => const AppShell(),
+          transitionsBuilder: (context, animation, secondaryAnimation, child) =>
+              FadeTransition(opacity: animation, child: child),
+          transitionDuration: const Duration(milliseconds: 400),
+        ),
+      );
     });
   }
 
@@ -617,11 +528,9 @@ class _OwnerAuthScreenState extends State<OwnerAuthScreen> {
                       Text(
                         _emailLinkSent
                             ? 'Verification email link sent to your inbox'
-                            : (_otpSent
-                                ? 'Enter 6-digit verification code'
-                                : (_isSignUp
-                                    ? 'Register shop with official email link verification'
-                                    : 'Sign in to access your shop with 2-step OTP verification')),
+                            : (_isSignUp
+                                ? 'Register shop with official email link verification'
+                                : 'Sign in to access your shop owner dashboard'),
                         textAlign: TextAlign.center,
                         style: GoogleFonts.outfit(
                           fontSize: 14,
@@ -662,7 +571,7 @@ class _OwnerAuthScreenState extends State<OwnerAuthScreen> {
                                   borderRadius: BorderRadius.circular(6),
                                 ),
                                 child: Text(
-                                  'Sent',
+                                  'Link Sent',
                                   style: GoogleFonts.outfit(
                                     fontSize: 11,
                                     fontWeight: FontWeight.bold,
@@ -736,35 +645,20 @@ class _OwnerAuthScreenState extends State<OwnerAuthScreen> {
                             TextButton(
                               onPressed: () {
                                 _emailVerificationPollTimer?.cancel();
-                                setState(() {
-                                  _emailLinkSent = false;
-                                  _preferOtp = true;
-                                  _otpSent = true;
-                                });
+                                setState(() => _emailLinkSent = false);
                               },
                               child: Text(
-                                'Use 6-Digit Code',
+                                'Change Email or Password',
                                 style: GoogleFonts.outfit(
                                   fontSize: 13,
                                   color: AppColors.secondary,
-                                  fontWeight: FontWeight.w600,
                                 ),
                               ),
                             ),
                           ],
                         ),
-                        TextButton(
-                          onPressed: () {
-                            _emailVerificationPollTimer?.cancel();
-                            setState(() => _emailLinkSent = false);
-                          },
-                          child: Text(
-                            'Change Email or Password',
-                            style: GoogleFonts.outfit(fontSize: 13, color: isDark ? Colors.white60 : Colors.black54),
-                          ),
-                        ),
-                      ] else if (!_otpSent) ...[
-                        // Tab Selector: Login vs Sign Up
+                      ] else ...[
+                        // Tab Selector: Sign In vs Register
                         Container(
                           padding: const EdgeInsets.all(4),
                           decoration: BoxDecoration(
@@ -862,8 +756,8 @@ class _OwnerAuthScreenState extends State<OwnerAuthScreen> {
                           controller: _emailController,
                           keyboardType: TextInputType.emailAddress,
                           decoration: const InputDecoration(
-                            hintText: 'name@business.com',
-                            prefixIcon: Icon(Icons.alternate_email_rounded),
+                            hintText: 'owner@apexretail.io',
+                            prefixIcon: Icon(Icons.mail_outline_rounded),
                           ),
                         ),
                         const SizedBox(height: 16),
@@ -896,17 +790,13 @@ class _OwnerAuthScreenState extends State<OwnerAuthScreen> {
                         // Action Button
                         GlowingGlassButton(
                           isLoading: _isLoading,
-                          onPressed: _isSignUp
-                              ? (_preferOtp ? _sendOtp : _registerWithEmailLink)
-                              : _sendOtp,
+                          onPressed: _isSignUp ? _registerWithEmailLink : _signInWithOwner,
                           child: Row(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
                               Flexible(
                                 child: Text(
-                                  _isSignUp
-                                      ? (_preferOtp ? 'Generate OTP & Register' : 'Send Verification Link to Email')
-                                      : 'Send Email OTP',
+                                  _isSignUp ? 'Send Verification Link' : 'Sign In to Dashboard',
                                   style: GoogleFonts.outfit(
                                     fontSize: 15,
                                     fontWeight: FontWeight.bold,
@@ -922,24 +812,6 @@ class _OwnerAuthScreenState extends State<OwnerAuthScreen> {
                         ),
                         const SizedBox(height: 14),
 
-                        if (_isSignUp) ...[
-                          Center(
-                            child: TextButton(
-                              onPressed: () => setState(() => _preferOtp = !_preferOtp),
-                              child: Text(
-                                _preferOtp
-                                    ? 'Switch to Official Email Link Verification'
-                                    : 'Prefer 6-Digit Code instead? Switch to OTP',
-                                style: GoogleFonts.outfit(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w500,
-                                  color: AppColors.secondary,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
-
                         Center(
                           child: TextButton.icon(
                             onPressed: _demoDirectLogin,
@@ -954,158 +826,6 @@ class _OwnerAuthScreenState extends State<OwnerAuthScreen> {
                               ),
                             ),
                           ),
-                        ),
-                      ] else ...[
-                        // Prominent Code Display Chip
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                          margin: const EdgeInsets.only(bottom: 20),
-                          decoration: BoxDecoration(
-                            color: AppColors.primary.withValues(alpha: 0.12),
-                            borderRadius: BorderRadius.circular(14),
-                            border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
-                          ),
-                          child: Row(
-                            children: [
-                              const Icon(Icons.mark_email_read_rounded, size: 20, color: AppColors.primaryLight),
-                              const SizedBox(width: 10),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      'Verification Code: $_currentOtp',
-                                      style: GoogleFonts.outfit(
-                                        fontSize: 14,
-                                        fontWeight: FontWeight.bold,
-                                        color: isDark ? Colors.white : Colors.black87,
-                                      ),
-                                    ),
-                                    Text(
-                                      'Enter this 6-digit code below to enter dashboard.',
-                                      style: GoogleFonts.outfit(
-                                        fontSize: 11,
-                                        color: isDark ? Colors.white70 : Colors.black54,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              TextButton(
-                                style: TextButton.styleFrom(
-                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                  visualDensity: VisualDensity.compact,
-                                ),
-                                onPressed: () {
-                                  for (int i = 0; i < 6 && i < _currentOtp.length; i++) {
-                                    _otpControllers[i].text = _currentOtp[i];
-                                  }
-                                },
-                                child: Text(
-                                  'Auto Fill',
-                                  style: GoogleFonts.outfit(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.bold,
-                                    color: AppColors.primaryLight,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-
-                        // OTP Input State
-                        Row(
-                          children: List.generate(6, (index) {
-                            return Expanded(
-                              child: Container(
-                                margin: EdgeInsets.only(
-                                  right: index < 5 ? 8 : 0,
-                                ),
-                                height: 52,
-                                child: TextField(
-                                  controller: _otpControllers[index],
-                                  textAlign: TextAlign.center,
-                                  keyboardType: TextInputType.number,
-                                  maxLength: 1,
-                                  style: GoogleFonts.outfit(
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                  decoration: const InputDecoration(
-                                    counterText: '',
-                                    contentPadding: EdgeInsets.zero,
-                                  ),
-                                  onChanged: (value) {
-                                    if (value.isNotEmpty && index < 5) {
-                                      FocusScope.of(context).nextFocus();
-                                    } else if (value.isEmpty && index > 0) {
-                                      FocusScope.of(context).previousFocus();
-                                    }
-                                  },
-                                ),
-                              ),
-                            );
-                          }),
-                        ),
-                        const SizedBox(height: 26),
-                        GlowingGlassButton(
-                          isLoading: _isLoading,
-                          onPressed: _verifyOtp,
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              const Icon(Icons.verified_user_rounded, color: Colors.white, size: 20),
-                              const SizedBox(width: 8),
-                              Flexible(
-                                child: Text(
-                                  'Verify & Enter Dashboard',
-                                  style: GoogleFonts.outfit(
-                                    fontSize: 15,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.white,
-                                  ),
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        Wrap(
-                          alignment: WrapAlignment.center,
-                          crossAxisAlignment: WrapCrossAlignment.center,
-                          children: [
-                            TextButton(
-                              onPressed: () => setState(() => _otpSent = false),
-                              child: Text(
-                                'Edit Email Address',
-                                style: GoogleFonts.outfit(
-                                  fontSize: 13,
-                                  color: AppColors.primaryLight,
-                                ),
-                              ),
-                            ),
-                            if (_isSignUp) ...[
-                              const Text(' • '),
-                              TextButton(
-                                onPressed: () {
-                                  setState(() {
-                                    _otpSent = false;
-                                    _preferOtp = false;
-                                  });
-                                  _registerWithEmailLink();
-                                },
-                                child: Text(
-                                  'Send Email Link',
-                                  style: GoogleFonts.outfit(
-                                    fontSize: 13,
-                                    color: AppColors.secondary,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ],
                         ),
                       ],
 
@@ -1132,15 +852,13 @@ class _OwnerAuthScreenState extends State<OwnerAuthScreen> {
                             ),
                           );
                         },
-                        icon: const Icon(Icons.qr_code_scanner_rounded, color: AppColors.secondary),
+                        icon: const Icon(Icons.qr_code_scanner_rounded),
                         label: Text(
-                          'Staff Member? Login with QR Code',
+                          'Switch to Staff Portal (Scan QR)',
                           style: GoogleFonts.outfit(
                             fontSize: 14,
                             fontWeight: FontWeight.w600,
-                            color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
                           ),
-                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
                     ],

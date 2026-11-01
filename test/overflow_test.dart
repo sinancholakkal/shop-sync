@@ -6,6 +6,7 @@ import 'package:shop_sync_app/features/auth/domain/models/user_role.dart';
 import 'package:shop_sync_app/features/auth/presentation/screens/owner_auth_screen.dart';
 import 'package:shop_sync_app/features/auth/presentation/screens/owner_dashboard_qr_screen.dart';
 import 'package:shop_sync_app/features/auth/presentation/screens/staff_details_input_screen.dart';
+import 'package:shop_sync_app/features/auth/presentation/screens/staff_pending_approval_screen.dart';
 import 'package:shop_sync_app/features/auth/presentation/screens/staff_qr_login_screen.dart';
 import 'package:shop_sync_app/features/inventory/domain/models/inventory_item.dart';
 import 'package:shop_sync_app/features/inventory/presentation/widgets/add_edit_item_dialog.dart';
@@ -76,7 +77,7 @@ void main() {
       });
     }
 
-    testWidgets('OwnerAuthScreen & OTP no overflow on ultra-compact mobile (320x568)', (tester) async {
+    testWidgets('OwnerAuthScreen & Email Verification no overflow on ultra-compact mobile (320x568)', (tester) async {
       tester.view.physicalSize = const Size(320, 568);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.resetPhysicalSize);
@@ -85,13 +86,20 @@ void main() {
       await tester.pumpWidget(_buildTestApp(child: const OwnerAuthScreen()));
       await tester.pumpAndSettle();
 
-      // Ensure button is visible & tap Send OTP
-      await tester.ensureVisible(find.text('Send Email OTP'));
-      await tester.tap(find.text('Send Email OTP'));
+      // Ensure Sign In button is visible
+      expect(find.text('Sign In to Dashboard'), findsOneWidget);
+
+      // Switch to Register Shop
+      await tester.tap(find.text('Register Shop'));
+      await tester.pumpAndSettle();
+
+      // Ensure button is visible & tap Send Verification Link
+      await tester.ensureVisible(find.text('Send Verification Link'));
+      await tester.tap(find.text('Send Verification Link'));
       await tester.pump(const Duration(seconds: 1));
       await tester.pumpAndSettle();
 
-      expect(find.text('Verify & Enter Dashboard'), findsOneWidget);
+      expect(find.text("I've Verified My Email"), findsOneWidget);
     });
 
     testWidgets('StaffOnboarding screens no overflow on compact mobile (320x568)', (tester) async {
@@ -114,13 +122,13 @@ void main() {
       ));
       await tester.pumpAndSettle();
 
-      // Trigger OTP on staff screen
-      await tester.ensureVisible(find.text('Send Verification OTP'));
-      await tester.tap(find.text('Send Verification OTP'));
+      // Submit registration on staff screen (navigates to screen with repeating pulse animation)
+      await tester.ensureVisible(find.text('Submit for Owner Approval'));
+      await tester.tap(find.text('Submit for Owner Approval'));
       await tester.pump(const Duration(seconds: 1));
-      await tester.pumpAndSettle();
+      await tester.pump(const Duration(milliseconds: 500));
 
-      expect(find.text('Verify & Complete Onboarding'), findsOneWidget);
+      expect(find.byType(StaffPendingApprovalScreen), findsOneWidget);
     });
 
     testWidgets('OwnerDashboardQrScreen no overflow on compact mobile (320x568)', (tester) async {
