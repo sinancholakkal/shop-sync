@@ -56,6 +56,13 @@ class FirebaseAuthService {
       name: shopName,
     );
 
+    // Send official Google Firebase email verification link to user's real email
+    try {
+      await cred.user?.sendEmailVerification();
+    } catch (e) {
+      debugPrint('FirebaseAuthService: verification email send notice: $e');
+    }
+
     return cred;
   }
 
@@ -68,6 +75,33 @@ class FirebaseAuthService {
       email: email.trim(),
       password: password,
     );
+  }
+
+  /// Send official Firebase email verification link to current user
+  Future<void> sendEmailVerification() async {
+    try {
+      final user = _auth.currentUser;
+      if (user != null && !user.emailVerified) {
+        await user.sendEmailVerification();
+      }
+    } catch (e) {
+      debugPrint('FirebaseAuthService: sendEmailVerification error: $e');
+      rethrow;
+    }
+  }
+
+  /// Reloads user profile from Firebase server and returns whether email is verified
+  Future<bool> checkEmailVerified() async {
+    try {
+      final user = _auth.currentUser;
+      if (user != null) {
+        await user.reload();
+        return _auth.currentUser?.emailVerified ?? false;
+      }
+    } catch (e) {
+      debugPrint('FirebaseAuthService: checkEmailVerified error: $e');
+    }
+    return false;
   }
 
   /// Sign out current Firebase session
