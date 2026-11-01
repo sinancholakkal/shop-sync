@@ -20,6 +20,177 @@ class _InventoryScreenState extends State<InventoryScreen> {
   String _searchQuery = '';
   String _selectedCategory = 'All';
 
+  Future<void> _showAddCategoryDialog(BuildContext context, AppStateProvider appState) async {
+    if (!appState.canManageCategories) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              const Icon(Icons.lock_outline_rounded, color: Colors.white, size: 18),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Permission Restricted: Only Shop Owner and Full Access Staff can add categories.',
+                  style: GoogleFonts.outfit(),
+                ),
+              ),
+            ],
+          ),
+          backgroundColor: AppColors.accentRose,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
+    final catController = TextEditingController();
+    final formKey = GlobalKey<FormState>();
+
+    await showDialog(
+      context: context,
+      barrierColor: Colors.black.withValues(alpha: 0.65),
+      builder: (dialogCtx) {
+        final isDark = Theme.of(dialogCtx).brightness == Brightness.dark;
+        return Dialog(
+          backgroundColor: Colors.transparent,
+          insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 420),
+            child: GlassContainer(
+              borderRadius: 24,
+              padding: const EdgeInsets.all(24),
+              child: Form(
+                key: formKey,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: AppColors.primary.withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: const Icon(
+                            Icons.category_rounded,
+                            color: AppColors.primaryLight,
+                            size: 22,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Add Category',
+                                style: GoogleFonts.outfit(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                  color: isDark ? Colors.white : Colors.black87,
+                                ),
+                              ),
+                              Text(
+                                'Role Authorized: Owner / Full Access Staff',
+                                style: GoogleFonts.outfit(
+                                  fontSize: 11,
+                                  color: AppColors.accentEmerald,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.close_rounded, size: 20),
+                          onPressed: () => Navigator.pop(dialogCtx),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 20),
+                    Text(
+                      'Category Name *',
+                      style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w600),
+                    ),
+                    const SizedBox(height: 6),
+                    TextFormField(
+                      controller: catController,
+                      autofocus: true,
+                      textCapitalization: TextCapitalization.words,
+                      decoration: const InputDecoration(
+                        hintText: 'e.g. Beverages, Furniture, Books',
+                        prefixIcon: Icon(Icons.label_outline_rounded),
+                      ),
+                      validator: (val) {
+                        final trimmed = val?.trim() ?? '';
+                        if (trimmed.isEmpty) return 'Please enter a category name';
+                        if (trimmed.length < 2) return 'Category name is too short';
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 24),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton(
+                            onPressed: () => Navigator.pop(dialogCtx),
+                            style: OutlinedButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(14),
+                              ),
+                            ),
+                            child: Text(
+                              'Cancel',
+                              style: GoogleFonts.outfit(fontWeight: FontWeight.w600),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: GlowingGlassButton(
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            onPressed: () {
+                              if (formKey.currentState?.validate() ?? false) {
+                                final newCat = catController.text.trim();
+                                appState.addCategory(newCat);
+                                setState(() {
+                                  _selectedCategory = newCat;
+                                });
+                                appState.setInventoryFilterCategory(newCat);
+                                Navigator.pop(dialogCtx);
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text('Category "$newCat" created successfully!'),
+                                    backgroundColor: AppColors.primary,
+                                    behavior: SnackBarBehavior.floating,
+                                  ),
+                                );
+                              }
+                            },
+                            child: Text(
+                              'Save Category',
+                              style: GoogleFonts.outfit(
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -190,123 +361,144 @@ class _InventoryScreenState extends State<InventoryScreen> {
                           'All',
                           'Low Stock',
                           'No Item (Out of Stock)',
+                          ...appState.allProductCategories,
                         ];
-                        final existingCats = appState.inventoryList
-                            .map((e) => e.category.trim())
-                            .where((c) => c.isNotEmpty)
-                            .toSet();
-                        if (existingCats.isEmpty) {
-                          filterCats.addAll(['Electronics', 'Accessories', 'Apparel']);
-                        } else {
-                          filterCats.addAll(existingCats);
-                        }
 
                         return SingleChildScrollView(
                           scrollDirection: Axis.horizontal,
                           child: Row(
-                            children: filterCats.map((cat) {
-                              final isSelected = _selectedCategory == cat;
+                            children: [
+                              ...filterCats.map((cat) {
+                                final isSelected = _selectedCategory == cat;
 
-                              Color selectedColor = AppColors.primary;
-                              Color? badgeColor;
-                              IconData? chipIcon;
-                              String? countBadge;
+                                Color selectedColor = AppColors.primary;
+                                Color? badgeColor;
+                                IconData? chipIcon;
+                                String? countBadge;
 
-                              if (cat == 'Low Stock') {
-                                chipIcon = Icons.warning_amber_rounded;
-                                selectedColor = AppColors.accentAmber;
-                                if (appState.lowStockItemCount > 0) {
-                                  countBadge = '${appState.lowStockItemCount}';
-                                  badgeColor = AppColors.accentAmber;
+                                if (cat == 'Low Stock') {
+                                  chipIcon = Icons.warning_amber_rounded;
+                                  selectedColor = AppColors.accentAmber;
+                                  if (appState.lowStockItemCount > 0) {
+                                    countBadge = '${appState.lowStockItemCount}';
+                                    badgeColor = AppColors.accentAmber;
+                                  }
+                                } else if (cat == 'No Item (Out of Stock)') {
+                                  chipIcon = Icons.remove_circle_outline_rounded;
+                                  selectedColor = AppColors.accentRose;
+                                  if (appState.outOfStockItemCount > 0) {
+                                    countBadge = '${appState.outOfStockItemCount}';
+                                    badgeColor = AppColors.accentRose;
+                                  }
+                                } else if (cat == 'All') {
+                                  selectedColor = AppColors.primary;
+                                  if (appState.inventoryList.isNotEmpty) {
+                                    countBadge = '${appState.inventoryList.length}';
+                                  }
                                 }
-                              } else if (cat == 'No Item (Out of Stock)') {
-                                chipIcon = Icons.remove_circle_outline_rounded;
-                                selectedColor = AppColors.accentRose;
-                                if (appState.outOfStockItemCount > 0) {
-                                  countBadge = '${appState.outOfStockItemCount}';
-                                  badgeColor = AppColors.accentRose;
-                                }
-                              } else if (cat == 'All') {
-                                selectedColor = AppColors.primary;
-                                if (appState.inventoryList.isNotEmpty) {
-                                  countBadge = '${appState.inventoryList.length}';
-                                }
-                              }
 
-                              return Padding(
-                                padding: const EdgeInsets.only(right: 8.0),
-                                child: FilterChip(
-                                  avatar: chipIcon != null
-                                      ? Icon(
-                                          chipIcon,
-                                          size: 16,
-                                          color: isSelected
-                                              ? Colors.white
-                                              : (cat == 'No Item (Out of Stock)'
-                                                  ? AppColors.accentRose
-                                                  : (cat == 'Low Stock'
-                                                      ? AppColors.accentAmber
-                                                      : (isDark ? Colors.white70 : Colors.black54))),
-                                        )
-                                      : null,
-                                  label: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Text(
-                                        cat,
-                                        style: GoogleFonts.outfit(
-                                          fontSize: 13,
-                                          fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-                                          color: isSelected
-                                              ? Colors.white
-                                              : (isDark ? Colors.white70 : Colors.black87),
-                                        ),
-                                      ),
-                                      if (countBadge != null) ...[
-                                        const SizedBox(width: 6),
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
-                                          decoration: BoxDecoration(
+                                return Padding(
+                                  padding: const EdgeInsets.only(right: 8.0),
+                                  child: FilterChip(
+                                    avatar: chipIcon != null
+                                        ? Icon(
+                                            chipIcon,
+                                            size: 16,
                                             color: isSelected
-                                                ? Colors.white.withValues(alpha: 0.25)
-                                                : (badgeColor ?? (isDark ? Colors.white12 : Colors.black12)).withValues(alpha: 0.2),
-                                            borderRadius: BorderRadius.circular(10),
+                                                ? Colors.white
+                                                : (cat == 'No Item (Out of Stock)'
+                                                    ? AppColors.accentRose
+                                                    : (cat == 'Low Stock'
+                                                        ? AppColors.accentAmber
+                                                        : (isDark ? Colors.white70 : Colors.black54))),
+                                          )
+                                        : null,
+                                    label: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Text(
+                                          cat,
+                                          style: GoogleFonts.outfit(
+                                            fontSize: 13,
+                                            fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                                            color: isSelected
+                                                ? Colors.white
+                                                : (isDark ? Colors.white70 : Colors.black87),
                                           ),
-                                          child: Text(
-                                            countBadge,
-                                            style: GoogleFonts.outfit(
-                                              fontSize: 11,
-                                              fontWeight: FontWeight.bold,
+                                        ),
+                                        if (countBadge != null) ...[
+                                          const SizedBox(width: 6),
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+                                            decoration: BoxDecoration(
                                               color: isSelected
-                                                  ? Colors.white
-                                                  : (badgeColor ?? (isDark ? Colors.white70 : Colors.black87)),
+                                                  ? Colors.white.withValues(alpha: 0.25)
+                                                  : (badgeColor ?? (isDark ? Colors.white12 : Colors.black12)).withValues(alpha: 0.2),
+                                              borderRadius: BorderRadius.circular(10),
+                                            ),
+                                            child: Text(
+                                              countBadge,
+                                              style: GoogleFonts.outfit(
+                                                fontSize: 11,
+                                                fontWeight: FontWeight.bold,
+                                                color: isSelected
+                                                    ? Colors.white
+                                                    : (badgeColor ?? (isDark ? Colors.white70 : Colors.black87)),
+                                              ),
                                             ),
                                           ),
-                                        ),
+                                        ],
                                       ],
-                                    ],
-                                  ),
-                                  selected: isSelected,
-                                  onSelected: (_) {
-                                    setState(() => _selectedCategory = cat);
-                                    appState.setInventoryFilterCategory(cat);
-                                  },
-                                  backgroundColor: isDark
-                                      ? Colors.white.withValues(alpha: 0.05)
-                                      : Colors.black.withValues(alpha: 0.04),
-                                  selectedColor: selectedColor,
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                    side: BorderSide(
-                                      color: isSelected
-                                          ? selectedColor
-                                          : (isDark ? AppColors.darkGlassBorder : AppColors.lightGlassBorder),
                                     ),
+                                    selected: isSelected,
+                                    onSelected: (_) {
+                                      setState(() => _selectedCategory = cat);
+                                      appState.setInventoryFilterCategory(cat);
+                                    },
+                                    backgroundColor: isDark
+                                        ? Colors.white.withValues(alpha: 0.05)
+                                        : Colors.black.withValues(alpha: 0.04),
+                                    selectedColor: selectedColor,
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                      side: BorderSide(
+                                        color: isSelected
+                                            ? selectedColor
+                                            : (isDark ? AppColors.darkGlassBorder : AppColors.lightGlassBorder),
+                                      ),
+                                    ),
+                                    showCheckmark: false,
                                   ),
-                                  showCheckmark: false,
+                                );
+                              }),
+                              if (appState.canManageCategories)
+                                Padding(
+                                  padding: const EdgeInsets.only(right: 8.0),
+                                  child: ActionChip(
+                                    avatar: const Icon(
+                                      Icons.add_circle_outline_rounded,
+                                      size: 16,
+                                      color: AppColors.primaryLight,
+                                    ),
+                                    label: Text(
+                                      'Add Category',
+                                      style: GoogleFonts.outfit(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w600,
+                                        color: AppColors.primaryLight,
+                                      ),
+                                    ),
+                                    backgroundColor: AppColors.primary.withValues(alpha: 0.12),
+                                    side: BorderSide(
+                                      color: AppColors.primaryLight.withValues(alpha: 0.35),
+                                    ),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    onPressed: () => _showAddCategoryDialog(context, appState),
+                                  ),
                                 ),
-                              );
-                            }).toList(),
+                            ],
                           ),
                         );
                       },

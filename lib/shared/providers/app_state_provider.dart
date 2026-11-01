@@ -22,6 +22,18 @@ class AppStateProvider extends ChangeNotifier {
   List<InventoryItem> _inventoryList = [];
   List<ShopTransaction> _transactionList = [];
 
+  // Static default product categories
+  static const List<String> defaultProductCategories = [
+    'Electronics',
+    'Accessories',
+    'Apparel',
+    'Groceries',
+    'Office Supplies',
+  ];
+
+  // Dynamic custom categories added by permitted users / staff
+  final List<String> _customCategories = [];
+
   // Active navigation index in app shell
   int _activeNavIndex = 0;
   String _inventoryFilterCategory = 'All';
@@ -30,6 +42,7 @@ class AppStateProvider extends ChangeNotifier {
   StreamSubscription<List<InventoryItem>>? _inventorySubscription;
   StreamSubscription<List<StaffMember>>? _staffSubscription;
   StreamSubscription<List<ShopTransaction>>? _transactionSubscription;
+  StreamSubscription<List<String>>? _categoriesSubscription;
 
   AppStateProvider({
     bool initialAuth = false,
@@ -80,6 +93,21 @@ class AppStateProvider extends ChangeNotifier {
       }, onError: (err) {
         debugPrint('AppStateProvider: Transaction stream error: $err');
       });
+
+      _categoriesSubscription = FirestoreService.instance
+          .streamCategories(targetShopId)
+          .listen((cats) {
+        for (final c in cats) {
+          final trimmed = c.trim();
+          if (trimmed.isNotEmpty &&
+              !_customCategories.any((x) => x.toLowerCase() == trimmed.toLowerCase())) {
+            _customCategories.add(trimmed);
+          }
+        }
+        notifyListeners();
+      }, onError: (err) {
+        debugPrint('AppStateProvider: Categories stream error: $err');
+      });
     } catch (e) {
       debugPrint('AppStateProvider: _bindFirestoreStreams notice: $e');
     }
@@ -92,6 +120,8 @@ class AppStateProvider extends ChangeNotifier {
     _staffSubscription = null;
     _transactionSubscription?.cancel();
     _transactionSubscription = null;
+    _categoriesSubscription?.cancel();
+    _categoriesSubscription = null;
   }
 
   Future<void> refreshAllData() async {
@@ -125,10 +155,58 @@ class AppStateProvider extends ChangeNotifier {
   List<StaffMember> get staffList => List.unmodifiable(_staffList);
   List<InventoryItem> get inventoryList => List.unmodifiable(_inventoryList);
   List<ShopTransaction> get transactionList => List.unmodifiable(_transactionList);
+  List<String> get customCategories => List.unmodifiable(_customCategories);
 
   StaffPermission get effectivePermission {
     if (isOwner) return StaffPermission.fullAccess;
     return _currentStaff?.permission ?? StaffPermission.readOnly;
+  }
+
+  /// Role-based permission check:
+  /// Shop Owner and Staff with Full Access (canModifyItems) can add product categories.
+  /// Staff with Stock Counting Only or Read-Only are restricted.
+  bool get canManageCategories => isOwner || effectivePermission.canModifyItems;
+
+  /// Aggregated list of all available product categories:
+  /// Default categories + dynamic user/staff-added categories + categories present in existing inventory items
+  List<String> get allProductCategories {
+    final Map<String, String> categoryMap = {}; // lowercase key -> preserved casing
+    for (final cat in defaultProductCategories) {
+      categoryMap[cat.toLowerCase()] = cat;
+    }
+    for (final cat in _customCategories) {
+      final trimmed = cat.trim();
+      if (trimmed.isNotEmpty) {
+        categoryMap[trimmed.toLowerCase()] = trimmed;
+      }
+    }
+    for (final item in _inventoryList) {
+      final trimmed = item.category.trim();
+      if (trimmed.isNotEmpty) {
+        categoryMap[trimmed.toLowerCase()] = trimmed;
+      }
+    }
+    return categoryMap.values.toList();
+  }
+
+  /// Adds a new product category if caller has permission (Shop Owner or Full Access Staff)
+  bool addCategory(String category) {
+    if (!canManageCategories) {
+      debugPrint('AppStateProvider: Unauthorized category add attempt by non-permitted user/staff');
+      return false;
+    }
+
+    final trimmed = category.trim();
+    if (trimmed.isEmpty) return false;
+
+    // Check if category already exists (case-insensitive)
+    final exists = allProductCategories.any((c) => c.toLowerCase() == trimmed.toLowerCase());
+    if (!exists) {
+      _customCategories.add(trimmed);
+      FirestoreService.instance.addCategory(_shopId, trimmed);
+      notifyListeners();
+    }
+    return true;
   }
 
   // Dashboard Aggregates
@@ -273,6 +351,7 @@ class AppStateProvider extends ChangeNotifier {
     _staffList = [];
     _inventoryList = [];
     _transactionList = [];
+    _customCategories.clear();
     _inventoryFilterCategory = 'All';
     _cancelFirestoreStreams();
     FirebaseAuthService.instance.signOut();

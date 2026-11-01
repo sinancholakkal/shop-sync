@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
 import 'package:shop_sync_app/core/theme/app_theme.dart';
 import 'package:shop_sync_app/core/widgets/glass_container.dart';
 import 'package:shop_sync_app/features/inventory/domain/models/inventory_item.dart';
+import 'package:shop_sync_app/shared/providers/app_state_provider.dart';
 
 class AddEditItemDialog extends StatefulWidget {
   final InventoryItem? item;
@@ -39,14 +41,6 @@ class _AddEditItemDialogState extends State<AddEditItemDialog> {
   late TextEditingController _minThresholdController;
   String _selectedCategory = 'Electronics';
 
-  final List<String> _categories = [
-    'Electronics',
-    'Accessories',
-    'Apparel',
-    'Groceries',
-    'Office Supplies',
-  ];
-
   @override
   void initState() {
     super.initState();
@@ -57,7 +51,7 @@ class _AddEditItemDialogState extends State<AddEditItemDialog> {
     _costPriceController = TextEditingController(text: item != null ? item.costPrice.toString() : '');
     _quantityController = TextEditingController(text: item != null ? item.quantity.toString() : '10');
     _minThresholdController = TextEditingController(text: item != null ? item.minThreshold.toString() : '5');
-    if (item != null && _categories.contains(item.category)) {
+    if (item != null && item.category.isNotEmpty) {
       _selectedCategory = item.category;
     }
   }
@@ -104,10 +98,195 @@ class _AddEditItemDialogState extends State<AddEditItemDialog> {
     Navigator.pop(context);
   }
 
+  Future<void> _showAddCategoryDialog(BuildContext context, AppStateProvider? appState) async {
+    if (appState != null && !appState.canManageCategories) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              const Icon(Icons.lock_outline_rounded, color: Colors.white, size: 18),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Permission Restricted: Only Shop Owner and Full Access Staff can add categories.',
+                  style: GoogleFonts.outfit(),
+                ),
+              ),
+            ],
+          ),
+          backgroundColor: AppColors.accentRose,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
+    final catController = TextEditingController();
+    final formKey = GlobalKey<FormState>();
+
+    await showDialog(
+      context: context,
+      barrierColor: Colors.black.withValues(alpha: 0.65),
+      builder: (dialogCtx) {
+        final isDark = Theme.of(dialogCtx).brightness == Brightness.dark;
+        return Dialog(
+          backgroundColor: Colors.transparent,
+          insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 420),
+            child: GlassContainer(
+              borderRadius: 24,
+              padding: const EdgeInsets.all(24),
+              child: Form(
+                key: formKey,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: AppColors.primary.withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: const Icon(
+                            Icons.category_rounded,
+                            color: AppColors.primaryLight,
+                            size: 22,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Add Category',
+                                style: GoogleFonts.outfit(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                  color: isDark ? Colors.white : Colors.black87,
+                                ),
+                              ),
+                              Text(
+                                'Role Authorized: Owner / Full Access Staff',
+                                style: GoogleFonts.outfit(
+                                  fontSize: 11,
+                                  color: AppColors.accentEmerald,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.close_rounded, size: 20),
+                          onPressed: () => Navigator.pop(dialogCtx),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 20),
+                    Text(
+                      'Category Name *',
+                      style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w600),
+                    ),
+                    const SizedBox(height: 6),
+                    TextFormField(
+                      controller: catController,
+                      autofocus: true,
+                      textCapitalization: TextCapitalization.words,
+                      decoration: const InputDecoration(
+                        hintText: 'e.g. Beverages, Furniture, Books',
+                        prefixIcon: Icon(Icons.label_outline_rounded),
+                      ),
+                      validator: (val) {
+                        final trimmed = val?.trim() ?? '';
+                        if (trimmed.isEmpty) return 'Please enter a category name';
+                        if (trimmed.length < 2) return 'Category name is too short';
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 24),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton(
+                            onPressed: () => Navigator.pop(dialogCtx),
+                            style: OutlinedButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(14),
+                              ),
+                            ),
+                            child: Text(
+                              'Cancel',
+                              style: GoogleFonts.outfit(fontWeight: FontWeight.w600),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: GlowingGlassButton(
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            onPressed: () {
+                              if (formKey.currentState?.validate() ?? false) {
+                                final newCat = catController.text.trim();
+                                if (appState != null) {
+                                  appState.addCategory(newCat);
+                                }
+                                setState(() {
+                                  _selectedCategory = newCat;
+                                });
+                                Navigator.pop(dialogCtx);
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text('Category "$newCat" created successfully!'),
+                                    backgroundColor: AppColors.primary,
+                                    behavior: SnackBarBehavior.floating,
+                                  ),
+                                );
+                              }
+                            },
+                            child: Text(
+                              'Save Category',
+                              style: GoogleFonts.outfit(
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final isEditing = widget.item != null;
+
+    AppStateProvider? appState;
+    try {
+      appState = Provider.of<AppStateProvider>(context);
+    } catch (_) {}
+
+    final canManageCategories = appState?.canManageCategories ?? true;
+    final availableCategories = List<String>.from(
+      appState?.allProductCategories ?? AppStateProvider.defaultProductCategories,
+    );
+    if (!availableCategories.contains(_selectedCategory) && _selectedCategory.isNotEmpty) {
+      availableCategories.insert(0, _selectedCategory);
+    }
 
     return Material(
       type: MaterialType.transparency,
@@ -197,23 +376,87 @@ class _AddEditItemDialogState extends State<AddEditItemDialog> {
                     final categoryField = Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('Category', style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w600)),
-                        const SizedBox(height: 6),
-                        DropdownButtonFormField<String>(
-                          isExpanded: true,
-                          initialValue: _selectedCategory,
-                          items: _categories.map((c) {
-                            return DropdownMenuItem(
-                              value: c,
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Flexible(
                               child: Text(
-                                c,
-                                style: GoogleFonts.outfit(fontSize: 14),
+                                'Category',
+                                style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w600),
                                 overflow: TextOverflow.ellipsis,
                               ),
-                            );
-                          }).toList(),
+                            ),
+                            if (canManageCategories) ...[
+                              const SizedBox(width: 8),
+                              Material(
+                                color: Colors.transparent,
+                                child: InkWell(
+                                  borderRadius: BorderRadius.circular(6),
+                                  onTap: () => _showAddCategoryDialog(context, appState),
+                                  child: Padding(
+                                    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        const Icon(Icons.add_circle_outline_rounded, size: 14, color: AppColors.primaryLight),
+                                        const SizedBox(width: 4),
+                                        Text(
+                                          '+ Add',
+                                          style: GoogleFonts.outfit(
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w600,
+                                            color: AppColors.primaryLight,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                        const SizedBox(height: 6),
+                        DropdownButtonFormField<String>(
+                          key: ValueKey(_selectedCategory),
+                          isExpanded: true,
+                          initialValue: availableCategories.contains(_selectedCategory) ? _selectedCategory : availableCategories.firstOrNull,
+                          items: [
+                            ...availableCategories.map((c) {
+                              return DropdownMenuItem(
+                                value: c,
+                                child: Text(
+                                  c,
+                                  style: GoogleFonts.outfit(fontSize: 14),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              );
+                            }),
+                            if (canManageCategories)
+                              DropdownMenuItem(
+                                value: '__ADD_NEW__',
+                                child: Row(
+                                  children: [
+                                    const Icon(Icons.add_rounded, size: 16, color: AppColors.primaryLight),
+                                    const SizedBox(width: 6),
+                                    Text(
+                                      '+ Add New Category...',
+                                      style: GoogleFonts.outfit(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w600,
+                                        color: AppColors.primaryLight,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                          ],
                           onChanged: (val) {
-                            if (val != null) setState(() => _selectedCategory = val);
+                            if (val == '__ADD_NEW__') {
+                              _showAddCategoryDialog(context, appState);
+                            } else if (val != null) {
+                              setState(() => _selectedCategory = val);
+                            }
                           },
                           decoration: const InputDecoration(
                             contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 14),

@@ -192,6 +192,49 @@ class FirestoreService {
   }
 
   // ----------------------------------------------------
+  // Dynamic Product Categories Streams & CRUD
+  // ----------------------------------------------------
+
+  Stream<List<String>> streamCategories(String shopId) {
+    try {
+      final firestore = _firestore;
+      if (firestore == null || shopId.isEmpty) return const Stream.empty();
+
+      return firestore
+          .collection('shops')
+          .doc(shopId)
+          .collection('categories')
+          .snapshots()
+          .map((snapshot) => snapshot.docs.map((doc) => doc.id).toList());
+    } catch (e) {
+      debugPrint('FirestoreService: streamCategories notice: $e');
+      return const Stream.empty();
+    }
+  }
+
+  Future<void> addCategory(String shopId, String category) async {
+    try {
+      final firestore = _firestore;
+      if (firestore == null || shopId.isEmpty) return;
+
+      final trimmed = category.trim();
+      if (trimmed.isEmpty) return;
+
+      await firestore
+          .collection('shops')
+          .doc(shopId)
+          .collection('categories')
+          .doc(trimmed)
+          .set({
+        'name': trimmed,
+        'createdAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+    } catch (e) {
+      debugPrint('FirestoreService: addCategory notice: $e');
+    }
+  }
+
+  // ----------------------------------------------------
   // Staff Real-time Streams & CRUD
   // ----------------------------------------------------
 

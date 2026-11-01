@@ -427,6 +427,139 @@ void main() {
       expect(staffState.isOwner, isFalse);
       expect(staffState.effectivePermission, StaffPermission.readOnly);
     });
+
+    test('Category addition is restricted based on RBAC permission role', () {
+      // 1. Owner permissions
+      final ownerState = AppStateProvider(initialAuth: false);
+      ownerState.loginAsOwner('owner@shop.io', shopId: 'SHOP-CAT-1', shopName: 'Cat Shop');
+      expect(ownerState.canManageCategories, isTrue);
+
+      final addedByOwner = ownerState.addCategory('Pet Supplies');
+      expect(addedByOwner, isTrue);
+      expect(ownerState.allProductCategories.contains('Pet Supplies'), isTrue);
+
+      // 2. Staff with Full Access permissions
+      final fullAccessStaff = StaffMember(
+        id: 'stf_full',
+        name: 'Manager Staff',
+        email: 'manager@shop.io',
+        permission: StaffPermission.fullAccess,
+        joinedDate: DateTime.now(),
+        shopId: 'SHOP-CAT-1',
+      );
+      final staffFullState = AppStateProvider(initialAuth: false);
+      staffFullState.loginAsStaff(fullAccessStaff, shopId: 'SHOP-CAT-1', shopName: 'Cat Shop');
+      expect(staffFullState.canManageCategories, isTrue);
+
+      final addedByFullStaff = staffFullState.addCategory('Home Decor');
+      expect(addedByFullStaff, isTrue);
+      expect(staffFullState.allProductCategories.contains('Home Decor'), isTrue);
+
+      // 3. Staff with Stock Counting Only permissions -> Restricted
+      final countingStaff = StaffMember(
+        id: 'stf_count',
+        name: 'Counter Staff',
+        email: 'counter@shop.io',
+        permission: StaffPermission.stockCounting,
+        joinedDate: DateTime.now(),
+        shopId: 'SHOP-CAT-1',
+      );
+      final staffCountState = AppStateProvider(initialAuth: false);
+      staffCountState.loginAsStaff(countingStaff, shopId: 'SHOP-CAT-1', shopName: 'Cat Shop');
+      expect(staffCountState.canManageCategories, isFalse);
+
+      final addedByCountStaff = staffCountState.addCategory('Restricted Category 1');
+      expect(addedByCountStaff, isFalse);
+      expect(staffCountState.allProductCategories.contains('Restricted Category 1'), isFalse);
+
+      // 4. Staff with Read-Only permissions -> Restricted
+      final readOnlyStaff = StaffMember(
+        id: 'stf_ro',
+        name: 'Viewer Staff',
+        email: 'viewer@shop.io',
+        permission: StaffPermission.readOnly,
+        joinedDate: DateTime.now(),
+        shopId: 'SHOP-CAT-1',
+      );
+      final staffRoState = AppStateProvider(initialAuth: false);
+      staffRoState.loginAsStaff(readOnlyStaff, shopId: 'SHOP-CAT-1', shopName: 'Cat Shop');
+      expect(staffRoState.canManageCategories, isFalse);
+
+      final addedByRoStaff = staffRoState.addCategory('Restricted Category 2');
+      expect(addedByRoStaff, isFalse);
+      expect(staffRoState.allProductCategories.contains('Restricted Category 2'), isFalse);
+    });
+
+    testWidgets('InventoryScreen category bar shows Add Category only for permitted roles', (tester) async {
+      tester.view.physicalSize = const Size(800, 1400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      // 1. Owner views InventoryScreen -> 'Add Category' chip is visible
+      final ownerState = AppStateProvider(initialAuth: true);
+      ownerState.loginAsOwner('owner@apex.io', shopId: 'SHOP-1', shopName: 'Apex Shop');
+
+      await tester.pumpWidget(
+        MultiBlocProvider(
+          providers: [
+            BlocProvider(create: (_) => ThemeCubit()),
+            BlocProvider(create: (_) => NavBarCubit()),
+            BlocProvider(create: (_) => ShopSyncCubit(isAuthenticated: true)),
+          ],
+          child: MultiProvider(
+            providers: [
+              ChangeNotifierProvider(create: (_) => ThemeProvider()),
+              ChangeNotifierProvider.value(value: ownerState),
+            ],
+            child: const MaterialApp(
+              home: Scaffold(
+                body: InventoryScreen(),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Add Category'), findsOneWidget);
+
+      // 2. Read-Only Staff views InventoryScreen -> 'Add Category' chip is NOT visible
+      final readOnlyStaff = StaffMember(
+        id: 'stf_ro',
+        name: 'Viewer Staff',
+        email: 'viewer@shop.io',
+        permission: StaffPermission.readOnly,
+        joinedDate: DateTime.now(),
+        shopId: 'SHOP-1',
+      );
+      final roState = AppStateProvider(initialAuth: true);
+      roState.loginAsStaff(readOnlyStaff, shopId: 'SHOP-1', shopName: 'Apex Shop');
+
+      await tester.pumpWidget(
+        MultiBlocProvider(
+          providers: [
+            BlocProvider(create: (_) => ThemeCubit()),
+            BlocProvider(create: (_) => NavBarCubit()),
+            BlocProvider(create: (_) => ShopSyncCubit(isAuthenticated: true)),
+          ],
+          child: MultiProvider(
+            providers: [
+              ChangeNotifierProvider(create: (_) => ThemeProvider()),
+              ChangeNotifierProvider.value(value: roState),
+            ],
+            child: const MaterialApp(
+              home: Scaffold(
+                body: InventoryScreen(),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Add Category'), findsNothing);
+    });
   });
 }
 

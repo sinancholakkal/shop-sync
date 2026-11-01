@@ -19,6 +19,15 @@ class ShopSyncState {
   final List<StaffMember> staffList;
   final List<InventoryItem> inventoryList;
   final List<ShopTransaction> transactionList;
+  final List<String> customCategories;
+
+  static const List<String> defaultProductCategories = [
+    'Electronics',
+    'Accessories',
+    'Apparel',
+    'Groceries',
+    'Office Supplies',
+  ];
 
   const ShopSyncState({
     this.isAuthenticated = false,
@@ -30,6 +39,7 @@ class ShopSyncState {
     this.staffList = const [],
     this.inventoryList = const [],
     this.transactionList = const [],
+    this.customCategories = const [],
   });
 
   bool get isOwner => currentUserRole == UserRole.owner;
@@ -37,6 +47,30 @@ class ShopSyncState {
   StaffPermission get effectivePermission {
     if (isOwner) return StaffPermission.fullAccess;
     return currentStaff?.permission ?? StaffPermission.readOnly;
+  }
+
+  /// Permission check for category management
+  bool get canManageCategories => isOwner || effectivePermission.canModifyItems;
+
+  /// Aggregated list of all product categories
+  List<String> get allProductCategories {
+    final Map<String, String> categoryMap = {};
+    for (final cat in defaultProductCategories) {
+      categoryMap[cat.toLowerCase()] = cat;
+    }
+    for (final cat in customCategories) {
+      final trimmed = cat.trim();
+      if (trimmed.isNotEmpty) {
+        categoryMap[trimmed.toLowerCase()] = trimmed;
+      }
+    }
+    for (final item in inventoryList) {
+      final trimmed = item.category.trim();
+      if (trimmed.isNotEmpty) {
+        categoryMap[trimmed.toLowerCase()] = trimmed;
+      }
+    }
+    return categoryMap.values.toList();
   }
 
   double get totalRevenue =>
@@ -72,6 +106,7 @@ class ShopSyncState {
     List<StaffMember>? staffList,
     List<InventoryItem>? inventoryList,
     List<ShopTransaction>? transactionList,
+    List<String>? customCategories,
     bool clearCurrentStaff = false,
   }) {
     return ShopSyncState(
@@ -84,6 +119,7 @@ class ShopSyncState {
       staffList: staffList ?? this.staffList,
       inventoryList: inventoryList ?? this.inventoryList,
       transactionList: transactionList ?? this.transactionList,
+      customCategories: customCategories ?? this.customCategories,
     );
   }
 }
@@ -92,6 +128,7 @@ class ShopSyncCubit extends Cubit<ShopSyncState> {
   StreamSubscription<List<InventoryItem>>? _inventorySubscription;
   StreamSubscription<List<StaffMember>>? _staffSubscription;
   StreamSubscription<List<ShopTransaction>>? _transactionSubscription;
+  StreamSubscription<List<String>>? _categoriesSubscription;
 
   ShopSyncCubit({bool isAuthenticated = false})
       : super(ShopSyncState(isAuthenticated: isAuthenticated)) {
@@ -143,6 +180,23 @@ class ShopSyncCubit extends Cubit<ShopSyncState> {
       }, onError: (e) {
         debugPrint('ShopSyncCubit: transaction stream error: $e');
       });
+
+      _categoriesSubscription = FirestoreService.instance
+          .streamCategories(targetShopId)
+          .listen((cats) {
+        if (!isClosed) {
+          final updated = List<String>.from(state.customCategories);
+          for (final c in cats) {
+            final trimmed = c.trim();
+            if (trimmed.isNotEmpty && !updated.any((x) => x.toLowerCase() == trimmed.toLowerCase())) {
+              updated.add(trimmed);
+            }
+          }
+          emit(state.copyWith(customCategories: updated));
+        }
+      }, onError: (e) {
+        debugPrint('ShopSyncCubit: categories stream error: $e');
+      });
     } catch (e) {
       debugPrint('ShopSyncCubit: _bindFirestoreStreams notice: $e');
     }
@@ -155,6 +209,25 @@ class ShopSyncCubit extends Cubit<ShopSyncState> {
     _staffSubscription = null;
     _transactionSubscription?.cancel();
     _transactionSubscription = null;
+    _categoriesSubscription?.cancel();
+    _categoriesSubscription = null;
+  }
+
+  bool addCategory(String category) {
+    if (!state.canManageCategories) {
+      debugPrint('ShopSyncCubit: Unauthorized category add attempt by non-permitted user/staff');
+      return false;
+    }
+    final trimmed = category.trim();
+    if (trimmed.isEmpty) return false;
+
+    final exists = state.allProductCategories.any((c) => c.toLowerCase() == trimmed.toLowerCase());
+    if (!exists) {
+      final updated = List<String>.from(state.customCategories)..add(trimmed);
+      emit(state.copyWith(customCategories: updated));
+      FirestoreService.instance.addCategory(state.shopId, trimmed);
+    }
+    return true;
   }
 
   void loginAsOwner(String email, {String? shopId, String? shopName}) {
@@ -207,6 +280,7 @@ class ShopSyncCubit extends Cubit<ShopSyncState> {
       staffList: const [],
       inventoryList: const [],
       transactionList: const [],
+      customCategories: const [],
     ));
   }
 
