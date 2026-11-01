@@ -20,103 +20,10 @@ class _TransactionDashboardScreenState
   String _searchQuery = '';
 
   void _showNewSaleModal(BuildContext context, AppStateProvider appState) {
-    final customerCtrl = TextEditingController(text: 'Customer Walk-in');
-    final amountCtrl = TextEditingController(text: '89.99');
-    PaymentMethod method = PaymentMethod.qrPay;
-
     showDialog(
       context: context,
       barrierColor: Colors.black.withValues(alpha: 0.65),
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setModalState) {
-          return Center(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(20),
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 480),
-                child: GlassContainer(
-                  borderRadius: 24,
-                  padding: const EdgeInsets.all(24),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            'Record New Sale',
-                            style: GoogleFonts.outfit(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          IconButton(
-                            icon: const Icon(Icons.close_rounded),
-                            onPressed: () => Navigator.pop(ctx),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 16),
-                      Text('Customer Name', style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w600)),
-                      const SizedBox(height: 6),
-                      TextField(
-                        controller: customerCtrl,
-                        decoration: const InputDecoration(prefixIcon: Icon(Icons.person_outline_rounded)),
-                      ),
-                      const SizedBox(height: 14),
-                      Text('Total Sale Amount (\$)', style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w600)),
-                      const SizedBox(height: 6),
-                      TextField(
-                        controller: amountCtrl,
-                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                        decoration: const InputDecoration(prefixIcon: Icon(Icons.attach_money_rounded)),
-                      ),
-                      const SizedBox(height: 14),
-                      Text('Payment Method', style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w600)),
-                      const SizedBox(height: 8),
-                      Wrap(
-                        spacing: 8,
-                        children: PaymentMethod.values.map((pm) {
-                          final isSel = method == pm;
-                          return ChoiceChip(
-                            label: Text(pm.name.toUpperCase()),
-                            selected: isSel,
-                            onSelected: (_) => setModalState(() => method = pm),
-                            selectedColor: AppColors.primary,
-                          );
-                        }).toList(),
-                      ),
-                      const SizedBox(height: 24),
-                      GlowingGlassButton(
-                        onPressed: () {
-                          final amt = double.tryParse(amountCtrl.text) ?? 50.0;
-                          final newTx = ShopTransaction(
-                            id: 'tx_${DateTime.now().millisecondsSinceEpoch}',
-                            invoiceNo: 'INV-2026-${1000 + appState.transactionList.length + 1}',
-                            timestamp: DateTime.now(),
-                            staffName: appState.isOwner ? 'Owner Admin' : (appState.currentStaff?.name ?? 'Staff'),
-                            customerName: customerCtrl.text.trim().isEmpty ? 'Walk-in Customer' : customerCtrl.text.trim(),
-                            totalAmount: amt,
-                            paymentMethod: method,
-                            itemsCount: 1,
-                          );
-                          appState.addTransaction(newTx);
-                          Navigator.pop(ctx);
-                        },
-                        child: const Text(
-                          'Complete Transaction',
-                          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          );
-        },
-      ),
+      builder: (_) => _RecordSaleModal(appState: appState),
     );
   }
 
@@ -495,3 +402,199 @@ class _TransactionCard extends StatelessWidget {
     );
   }
 }
+
+class _RecordSaleModal extends StatefulWidget {
+  final AppStateProvider appState;
+
+  const _RecordSaleModal({required this.appState});
+
+  @override
+  State<_RecordSaleModal> createState() => _RecordSaleModalState();
+}
+
+class _RecordSaleModalState extends State<_RecordSaleModal> {
+  late final TextEditingController _customerCtrl;
+  late final TextEditingController _amountCtrl;
+  PaymentMethod _method = PaymentMethod.qrPay;
+
+  @override
+  void initState() {
+    super.initState();
+    _customerCtrl = TextEditingController(text: 'Customer Walk-in');
+    _amountCtrl = TextEditingController(text: '89.99');
+  }
+
+  @override
+  void dispose() {
+    _customerCtrl.dispose();
+    _amountCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return Dialog(
+      backgroundColor: Colors.transparent,
+      elevation: 0,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 480),
+        child: Material(
+          type: MaterialType.transparency,
+          child: GlassContainer(
+            borderRadius: 24,
+            padding: const EdgeInsets.all(24),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Expanded(
+                        child: Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(10),
+                              decoration: BoxDecoration(
+                                color: AppColors.primary.withValues(alpha: 0.15),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: const Icon(
+                                Icons.receipt_long_rounded,
+                                color: AppColors.primaryLight,
+                                size: 22,
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Record New Sale',
+                                    style: GoogleFonts.outfit(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.bold,
+                                      color: isDark ? Colors.white : Colors.black87,
+                                    ),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  Text(
+                                    'Enter sale amount & payment type',
+                                    style: GoogleFonts.outfit(
+                                      fontSize: 12,
+                                      color: isDark ? Colors.white60 : Colors.black54,
+                                    ),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.close_rounded),
+                        onPressed: () => Navigator.pop(context),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 18),
+                  Text('Customer Name', style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 6),
+                  TextField(
+                    controller: _customerCtrl,
+                    decoration: const InputDecoration(
+                      hintText: 'Walk-in Customer',
+                      prefixIcon: Icon(Icons.person_outline_rounded),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  Text('Total Sale Amount (\$)', style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 6),
+                  TextField(
+                    controller: _amountCtrl,
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    decoration: const InputDecoration(
+                      hintText: '0.00',
+                      prefixIcon: Icon(Icons.attach_money_rounded),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  Text('Payment Method', style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: PaymentMethod.values.map((pm) {
+                      final isSel = _method == pm;
+                      return ChoiceChip(
+                        label: Text(pm.name.toUpperCase()),
+                        selected: isSel,
+                        onSelected: (_) => setState(() => _method = pm),
+                        selectedColor: AppColors.primary,
+                        labelStyle: GoogleFonts.outfit(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 12,
+                          color: isSel ? Colors.white : (isDark ? Colors.white70 : Colors.black87),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                  const SizedBox(height: 24),
+                  GlowingGlassButton(
+                    onPressed: () {
+                      final amt = double.tryParse(_amountCtrl.text.trim()) ?? 0.0;
+                      if (amt <= 0) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Please enter a valid sale amount greater than 0.')),
+                        );
+                        return;
+                      }
+                      final newTx = ShopTransaction(
+                        id: 'tx_${DateTime.now().millisecondsSinceEpoch}',
+                        invoiceNo: 'INV-2026-${1000 + widget.appState.transactionList.length + 1}',
+                        timestamp: DateTime.now(),
+                        staffName: widget.appState.isOwner
+                            ? 'Owner Admin'
+                            : (widget.appState.currentStaff?.name ?? 'Staff'),
+                        customerName: _customerCtrl.text.trim().isEmpty
+                            ? 'Walk-in Customer'
+                            : _customerCtrl.text.trim(),
+                        totalAmount: amt,
+                        paymentMethod: _method,
+                        itemsCount: 1,
+                      );
+                      widget.appState.addTransaction(newTx);
+                      Navigator.pop(context);
+                    },
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(Icons.check_circle_rounded, color: Colors.white, size: 18),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Complete Transaction',
+                          style: GoogleFonts.outfit(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 15,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+

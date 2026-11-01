@@ -18,6 +18,7 @@ import 'package:shop_sync_app/data/repositories/mock_data_repository.dart';
 import 'package:shop_sync_app/main.dart';
 import 'package:shop_sync_app/shared/cubit/shop_sync_cubit.dart';
 import 'package:shop_sync_app/shared/providers/app_state_provider.dart';
+import 'package:shop_sync_app/features/transactions/presentation/screens/transaction_dashboard_screen.dart';
 
 void main() {
   setUp(() {
@@ -1176,6 +1177,47 @@ void main() {
       expect(saved!.marginPercent, 100.0);
       expect(saved!.wholesaleMarginPercent, 60.0);
     });
+
+    testWidgets('TransactionDashboardScreen Record Sale dialog renders with Material ancestor and records transaction', (tester) async {
+      final appState = AppStateProvider();
+      final initialTxCount = appState.transactionList.length;
+
+      await tester.pumpWidget(
+        MultiProvider(
+          providers: [
+            ChangeNotifierProvider(create: (_) => ThemeProvider()),
+            ChangeNotifierProvider.value(value: appState),
+          ],
+          child: const MaterialApp(
+            home: TransactionDashboardScreen(),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Find and tap "Record Sale" button
+      final recordSaleBtn = find.text('Record Sale');
+      expect(recordSaleBtn, findsOneWidget);
+      await tester.tap(recordSaleBtn);
+      await tester.pumpAndSettle();
+
+      // Verify modal is displayed with Material ancestor, no error thrown
+      expect(find.text('Record New Sale'), findsOneWidget);
+      expect(find.text('Customer Name'), findsOneWidget);
+      expect(find.text('Total Sale Amount (\$)'), findsOneWidget);
+      expect(find.text('Payment Method'), findsOneWidget);
+
+      // Tap Complete Transaction
+      final completeBtn = find.text('Complete Transaction');
+      expect(completeBtn, findsOneWidget);
+      await tester.tap(completeBtn);
+      await tester.pumpAndSettle();
+
+      // Dialog is dismissed and new transaction is recorded
+      expect(find.text('Record New Sale'), findsNothing);
+      expect(appState.transactionList.length, initialTxCount + 1);
+    });
   });
 }
+
 
