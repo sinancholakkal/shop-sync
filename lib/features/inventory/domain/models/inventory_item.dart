@@ -47,4 +47,33 @@ class InventoryItem {
       lastUpdated: lastUpdated ?? this.lastUpdated,
     );
   }
+
+  Map<String, dynamic> toMap() {
+    return {
+      'name': name,
+      'sku': sku,
+      'category': category,
+      'price': price,
+      'costPrice': costPrice,
+      'quantity': quantity,
+      'minThreshold': minThreshold,
+      'lastUpdated': lastUpdated.toIso8601String(),
+    };
+  }
+
+  factory InventoryItem.fromMap(Map<String, dynamic> map, String docId) {
+    return InventoryItem(
+      id: docId,
+      name: map['name'] as String? ?? 'Unnamed Product',
+      sku: map['sku'] as String? ?? 'SKU-000',
+      category: map['category'] as String? ?? 'General',
+      price: (map['price'] as num?)?.toDouble() ?? 0.0,
+      costPrice: (map['costPrice'] as num?)?.toDouble() ?? 0.0,
+      quantity: (map['quantity'] as num?)?.toInt() ?? 0,
+      minThreshold: (map['minThreshold'] as num?)?.toInt() ?? 5,
+      lastUpdated: map['lastUpdated'] != null
+          ? DateTime.tryParse(map['lastUpdated'] as String) ?? DateTime.now()
+          : DateTime.now(),
+    );
+  }
 }

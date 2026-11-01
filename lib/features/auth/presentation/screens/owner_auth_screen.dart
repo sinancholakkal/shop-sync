@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
+import 'package:shop_sync_app/core/services/firebase_auth_service.dart';
+import 'package:shop_sync_app/core/services/firestore_service.dart';
 import 'package:shop_sync_app/core/theme/app_theme.dart';
 import 'package:shop_sync_app/core/theme/theme_provider.dart';
 import 'package:shop_sync_app/core/widgets/glass_container.dart';
@@ -20,9 +22,12 @@ class _OwnerAuthScreenState extends State<OwnerAuthScreen> {
   bool _isSignUp = false;
   bool _otpSent = false;
   bool _isLoading = false;
+  bool _obscurePassword = true;
 
   final TextEditingController _emailController =
       TextEditingController(text: 'owner@apexretail.io');
+  final TextEditingController _passwordController =
+      TextEditingController(text: 'password123');
   final TextEditingController _shopNameController =
       TextEditingController(text: 'Apex Retail & Tech Hub');
   final List<TextEditingController> _otpControllers =
@@ -30,8 +35,9 @@ class _OwnerAuthScreenState extends State<OwnerAuthScreen> {
 
   @override
   void dispose() {
-    _emailController.dispose;
-    _shopNameController.dispose;
+    _emailController.dispose();
+    _passwordController.dispose();
+    _shopNameController.dispose();
     for (var c in _otpControllers) {
       c.dispose();
     }
@@ -47,7 +53,7 @@ class _OwnerAuthScreenState extends State<OwnerAuthScreen> {
     }
 
     setState(() => _isLoading = true);
-    Future.delayed(const Duration(milliseconds: 800), () {
+    Future.delayed(const Duration(milliseconds: 600), () {
       if (mounted) {
         setState(() {
           _isLoading = false;
@@ -64,18 +70,54 @@ class _OwnerAuthScreenState extends State<OwnerAuthScreen> {
     });
   }
 
-  void _demoDirectLogin() {
+  Future<void> _verifyOtp() async {
     setState(() => _isLoading = true);
-    Future.delayed(const Duration(milliseconds: 300), () {
+
+    try {
+      final email = _emailController.text.trim().isNotEmpty
+          ? _emailController.text.trim()
+          : 'owner@apexretail.io';
+      final password = _passwordController.text.trim().isNotEmpty
+          ? _passwordController.text.trim()
+          : 'password123';
+      final shopName = _shopNameController.text.trim().isNotEmpty
+          ? _shopNameController.text.trim()
+          : 'Apex Retail & Tech Hub';
+
+      String resolvedShopId = 'SHOP-SYNC-8821';
+      String resolvedShopName = shopName;
+
+      // Try Firebase authentication if available, fallback gracefully
+      try {
+        if (_isSignUp) {
+          final cred = await FirebaseAuthService.instance.signUpWithOwner(
+            email: email,
+            password: password,
+            shopName: shopName,
+          );
+          final uid = cred.user?.uid ?? '';
+          final cleanSuffix = uid.length >= 6 ? uid.substring(0, 6).toUpperCase() : uid.toUpperCase();
+          resolvedShopId = 'SHOP-SYNC-$cleanSuffix';
+        } else {
+          final cred = await FirebaseAuthService.instance.signIn(
+            email: email,
+            password: password,
+          );
+          final profile = await FirestoreService.instance.getUserProfile(cred.user?.uid ?? '');
+          if (profile != null) {
+            resolvedShopId = profile['shopId'] as String? ?? resolvedShopId;
+            resolvedShopName = profile['name'] as String? ?? resolvedShopName;
+          }
+        }
+      } catch (fbErr) {
+        debugPrint('Firebase Auth notice during OTP verify: $fbErr');
+      }
+
       if (mounted) {
-        setState(() => _isLoading = false);
         final appState = Provider.of<AppStateProvider>(context, listen: false);
-        final email = _emailController.text.trim().isNotEmpty
-            ? _emailController.text.trim()
-            : 'owner@apexretail.io';
-        appState.loginAsOwner(email);
+        appState.loginAsOwner(email, shopId: resolvedShopId, shopName: resolvedShopName);
         try {
-          context.read<ShopSyncCubit?>()?.loginAsOwner(email);
+          context.read<ShopSyncCubit?>()?.loginAsOwner(email, shopId: resolvedShopId, shopName: resolvedShopName);
         } catch (_) {}
 
         Navigator.of(context).pushReplacement(
@@ -87,21 +129,114 @@ class _OwnerAuthScreenState extends State<OwnerAuthScreen> {
           ),
         );
       }
-    });
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
   }
 
-  void _verifyOtp() {
+  Future<void> _handleFirebaseSubmit() async {
+    final email = _emailController.text.trim();
+    final password = _passwordController.text.trim();
+    final shopName = _shopNameController.text.trim();
+
+    if (email.isEmpty || !email.contains('@')) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter a valid email address')),
+      );
+      return;
+    }
+
+    if (password.length < 6) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Password must be at least 6 characters')),
+      );
+      return;
+    }
+
+    if (_isSignUp && shopName.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter a shop business name')),
+      );
+      return;
+    }
+
     setState(() => _isLoading = true);
-    Future.delayed(const Duration(milliseconds: 700), () {
+
+    try {
+      String resolvedShopId = 'SHOP-SYNC-8821';
+      String resolvedShopName = shopName.isNotEmpty ? shopName : 'Apex Retail & Tech Hub';
+
+      if (_isSignUp) {
+        final cred = await FirebaseAuthService.instance.signUpWithOwner(
+          email: email,
+          password: password,
+          shopName: resolvedShopName,
+        );
+        final uid = cred.user?.uid ?? '';
+        final cleanSuffix = uid.length >= 6 ? uid.substring(0, 6).toUpperCase() : uid.toUpperCase();
+        resolvedShopId = 'SHOP-SYNC-$cleanSuffix';
+      } else {
+        final cred = await FirebaseAuthService.instance.signIn(
+          email: email,
+          password: password,
+        );
+        final profile = await FirestoreService.instance.getUserProfile(cred.user?.uid ?? '');
+        if (profile != null) {
+          resolvedShopId = profile['shopId'] as String? ?? resolvedShopId;
+          resolvedShopName = profile['name'] as String? ?? resolvedShopName;
+        }
+      }
+
+      if (mounted) {
+        final appState = Provider.of<AppStateProvider>(context, listen: false);
+        appState.loginAsOwner(email, shopId: resolvedShopId, shopName: resolvedShopName);
+        try {
+          context.read<ShopSyncCubit?>()?.loginAsOwner(email, shopId: resolvedShopId, shopName: resolvedShopName);
+        } catch (_) {}
+
+        Navigator.of(context).pushReplacement(
+          PageRouteBuilder(
+            pageBuilder: (context, animation, secondaryAnimation) => const AppShell(),
+            transitionsBuilder: (context, animation, secondaryAnimation, child) =>
+                FadeTransition(opacity: animation, child: child),
+            transitionDuration: const Duration(milliseconds: 400),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        final errorMsg = FirebaseAuthService.getFriendlyErrorMessage(e);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(errorMsg),
+            backgroundColor: AppColors.accentRose,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  void _demoDirectLogin() {
+    setState(() => _isLoading = true);
+    Future.delayed(const Duration(milliseconds: 300), () {
       if (mounted) {
         setState(() => _isLoading = false);
         final appState = Provider.of<AppStateProvider>(context, listen: false);
         final email = _emailController.text.trim().isNotEmpty
             ? _emailController.text.trim()
             : 'owner@apexretail.io';
-        appState.loginAsOwner(email);
+        final shopName = _shopNameController.text.trim().isNotEmpty
+            ? _shopNameController.text.trim()
+            : 'Apex Retail & Tech Hub';
+        appState.loginAsOwner(email, shopName: shopName);
         try {
-          context.read<ShopSyncCubit?>()?.loginAsOwner(email);
+          context.read<ShopSyncCubit?>()?.loginAsOwner(email, shopName: shopName);
         } catch (_) {}
 
         Navigator.of(context).pushReplacement(
@@ -330,6 +465,31 @@ class _OwnerAuthScreenState extends State<OwnerAuthScreen> {
                             prefixIcon: Icon(Icons.alternate_email_rounded),
                           ),
                         ),
+                        const SizedBox(height: 16),
+
+                        Text(
+                          'Password',
+                          style: GoogleFonts.outfit(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        TextField(
+                          controller: _passwordController,
+                          obscureText: _obscurePassword,
+                          decoration: InputDecoration(
+                            hintText: '••••••••',
+                            prefixIcon: const Icon(Icons.lock_rounded),
+                            suffixIcon: IconButton(
+                              icon: Icon(
+                                _obscurePassword ? Icons.visibility_off_rounded : Icons.visibility_rounded,
+                                size: 20,
+                              ),
+                              onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                            ),
+                          ),
+                        ),
                         const SizedBox(height: 26),
 
                         GlowingGlassButton(
@@ -355,6 +515,23 @@ class _OwnerAuthScreenState extends State<OwnerAuthScreen> {
                           ),
                         ),
                         const SizedBox(height: 10),
+
+                        Center(
+                          child: TextButton.icon(
+                            onPressed: _handleFirebaseSubmit,
+                            icon: const Icon(Icons.cloud_done_rounded,
+                                size: 16, color: AppColors.primaryLight),
+                            label: Text(
+                              _isSignUp ? 'Register with Password' : 'Sign In with Password',
+                              style: GoogleFonts.outfit(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.primaryLight,
+                              ),
+                            ),
+                          ),
+                        ),
+
                         Center(
                           child: TextButton.icon(
                             onPressed: _demoDirectLogin,

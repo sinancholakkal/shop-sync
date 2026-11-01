@@ -1,4 +1,8 @@
+import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import '../../core/services/firebase_auth_service.dart';
+import '../../core/services/firestore_service.dart';
 import '../../data/repositories/mock_data_repository.dart';
 import '../../features/auth/domain/models/user_role.dart';
 import '../../features/inventory/domain/models/inventory_item.dart';
@@ -74,9 +78,16 @@ class ShopSyncState {
 }
 
 class ShopSyncCubit extends Cubit<ShopSyncState> {
+  StreamSubscription<List<InventoryItem>>? _inventorySubscription;
+  StreamSubscription<List<StaffMember>>? _staffSubscription;
+  StreamSubscription<List<ShopTransaction>>? _transactionSubscription;
+
   ShopSyncCubit({bool isAuthenticated = true})
       : super(ShopSyncState(isAuthenticated: isAuthenticated)) {
     initializeData();
+    if (isAuthenticated) {
+      _bindFirestoreStreams(state.shopId);
+    }
   }
 
   void initializeData() {
@@ -92,24 +103,91 @@ class ShopSyncCubit extends Cubit<ShopSyncState> {
     ));
   }
 
-  void loginAsOwner(String email) {
+  void _bindFirestoreStreams(String targetShopId) {
+    _cancelFirestoreStreams();
+
+    try {
+      _inventorySubscription = FirestoreService.instance
+          .streamInventory(targetShopId)
+          .listen((items) {
+        if (items.isNotEmpty && !isClosed) {
+          emit(state.copyWith(inventoryList: items));
+        }
+      }, onError: (e) {
+        debugPrint('ShopSyncCubit: inventory stream error: $e');
+      });
+
+      _staffSubscription = FirestoreService.instance
+          .streamStaff(targetShopId)
+          .listen((staff) {
+        if (staff.isNotEmpty && !isClosed) {
+          StaffMember? updatedCurrent = state.currentStaff;
+          if (updatedCurrent != null) {
+            updatedCurrent = staff.firstWhere(
+              (s) => s.id == updatedCurrent!.id,
+              orElse: () => staff.first,
+            );
+          }
+          emit(state.copyWith(
+            staffList: staff,
+            currentStaff: updatedCurrent,
+          ));
+        }
+      }, onError: (e) {
+        debugPrint('ShopSyncCubit: staff stream error: $e');
+      });
+
+      _transactionSubscription = FirestoreService.instance
+          .streamTransactions(targetShopId)
+          .listen((txs) {
+        if (txs.isNotEmpty && !isClosed) {
+          emit(state.copyWith(transactionList: txs));
+        }
+      }, onError: (e) {
+        debugPrint('ShopSyncCubit: transaction stream error: $e');
+      });
+    } catch (e) {
+      debugPrint('ShopSyncCubit: _bindFirestoreStreams notice: $e');
+    }
+  }
+
+  void _cancelFirestoreStreams() {
+    _inventorySubscription?.cancel();
+    _inventorySubscription = null;
+    _staffSubscription?.cancel();
+    _staffSubscription = null;
+    _transactionSubscription?.cancel();
+    _transactionSubscription = null;
+  }
+
+  void loginAsOwner(String email, {String? shopId, String? shopName}) {
+    final activeShopId = shopId ?? state.shopId;
     emit(state.copyWith(
       isAuthenticated: true,
       currentUserRole: UserRole.owner,
       ownerEmail: email,
+      shopId: activeShopId,
+      shopName: shopName ?? state.shopName,
       clearCurrentStaff: true,
     ));
+    _bindFirestoreStreams(activeShopId);
   }
 
-  void loginAsStaff(StaffMember staff) {
+  void loginAsStaff(StaffMember staff, {String? shopId, String? shopName}) {
+    final activeShopId = shopId ?? state.shopId;
     emit(state.copyWith(
       isAuthenticated: true,
       currentUserRole: UserRole.staff,
       currentStaff: staff,
+      shopId: activeShopId,
+      shopName: shopName ?? state.shopName,
     ));
+    _bindFirestoreStreams(activeShopId);
   }
 
   void logout() {
+    _cancelFirestoreStreams();
+    FirebaseAuthService.instance.signOut();
     emit(state.copyWith(isAuthenticated: false));
   }
 
@@ -145,6 +223,8 @@ class ShopSyncCubit extends Cubit<ShopSyncState> {
       updatedCurrent = updatedCurrent?.copyWith(permission: newPermission);
     }
 
+    FirestoreService.instance.updateStaffPermission(state.shopId, staffId, newPermission);
+
     emit(state.copyWith(
       staffList: updatedList,
       currentStaff: updatedCurrent,
@@ -152,12 +232,16 @@ class ShopSyncCubit extends Cubit<ShopSyncState> {
   }
 
   void toggleStaffStatus(String staffId) {
+    bool nextActive = true;
     final updatedList = state.staffList.map((s) {
       if (s.id == staffId) {
-        return s.copyWith(isActive: !s.isActive);
+        nextActive = !s.isActive;
+        return s.copyWith(isActive: nextActive);
       }
       return s;
     }).toList();
+
+    FirestoreService.instance.toggleStaffStatus(state.shopId, staffId, nextActive);
 
     emit(state.copyWith(staffList: updatedList));
   }
@@ -178,6 +262,8 @@ class ShopSyncCubit extends Cubit<ShopSyncState> {
     );
     final updatedList = [newStaff, ...state.staffList];
 
+    FirestoreService.instance.addStaffMember(state.shopId, newStaff);
+
     emit(state.copyWith(
       staffList: updatedList,
       currentStaff: newStaff,
@@ -188,6 +274,7 @@ class ShopSyncCubit extends Cubit<ShopSyncState> {
 
   void addInventoryItem(InventoryItem item) {
     final updatedList = [item, ...state.inventoryList];
+    FirestoreService.instance.addInventoryItem(state.shopId, item);
     emit(state.copyWith(inventoryList: updatedList));
   }
 
@@ -195,6 +282,7 @@ class ShopSyncCubit extends Cubit<ShopSyncState> {
     final updatedList = state.inventoryList.map((i) {
       return i.id == updatedItem.id ? updatedItem : i;
     }).toList();
+    FirestoreService.instance.updateInventoryItem(state.shopId, updatedItem);
     emit(state.copyWith(inventoryList: updatedList));
   }
 
@@ -208,16 +296,25 @@ class ShopSyncCubit extends Cubit<ShopSyncState> {
       }
       return i;
     }).toList();
+    FirestoreService.instance.updateStockQuantity(state.shopId, itemId, newQuantity);
     emit(state.copyWith(inventoryList: updatedList));
   }
 
   void deleteInventoryItem(String itemId) {
     final updatedList = state.inventoryList.where((i) => i.id != itemId).toList();
+    FirestoreService.instance.deleteInventoryItem(state.shopId, itemId);
     emit(state.copyWith(inventoryList: updatedList));
   }
 
   void addTransaction(ShopTransaction tx) {
     final updatedList = [tx, ...state.transactionList];
+    FirestoreService.instance.addTransaction(state.shopId, tx);
     emit(state.copyWith(transactionList: updatedList));
+  }
+
+  @override
+  Future<void> close() {
+    _cancelFirestoreStreams();
+    return super.close();
   }
 }

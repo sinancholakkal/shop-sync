@@ -38,4 +38,36 @@ class StaffMember {
       shopId: shopId ?? this.shopId,
     );
   }
+
+  Map<String, dynamic> toMap() {
+    return {
+      'name': name,
+      'email': email,
+      'permission': permission.name,
+      'isActive': isActive,
+      'joinedDate': joinedDate.toIso8601String(),
+      'shopId': shopId,
+    };
+  }
+
+  factory StaffMember.fromMap(Map<String, dynamic> map, String docId) {
+    StaffPermission perm = StaffPermission.readOnly;
+    if (map['permission'] != null) {
+      try {
+        perm = StaffPermission.values.byName(map['permission'] as String);
+      } catch (_) {}
+    }
+
+    return StaffMember(
+      id: docId,
+      name: map['name'] as String? ?? 'Staff Member',
+      email: map['email'] as String? ?? '',
+      permission: perm,
+      isActive: map['isActive'] as bool? ?? true,
+      joinedDate: map['joinedDate'] != null
+          ? DateTime.tryParse(map['joinedDate'] as String) ?? DateTime.now()
+          : DateTime.now(),
+      shopId: map['shopId'] as String?,
+    );
+  }
 }

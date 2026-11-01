@@ -1,4 +1,7 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
+import '../../core/services/firebase_auth_service.dart';
+import '../../core/services/firestore_service.dart';
 import '../../data/repositories/mock_data_repository.dart';
 import '../../features/auth/domain/models/user_role.dart';
 import '../../features/inventory/domain/models/inventory_item.dart';
@@ -10,8 +13,8 @@ class AppStateProvider extends ChangeNotifier {
   bool _isAuthenticated;
   UserRole _currentUserRole = UserRole.owner;
   String _ownerEmail = MockDataRepository.defaultOwnerEmail;
-  final String _shopId = MockDataRepository.defaultShopId;
-  final String _shopName = MockDataRepository.defaultShopName;
+  String _shopId = MockDataRepository.defaultShopId;
+  String _shopName = MockDataRepository.defaultShopName;
   StaffMember? _currentStaff;
 
   // Domain Data Lists
@@ -22,8 +25,16 @@ class AppStateProvider extends ChangeNotifier {
   // Active navigation index in app shell
   int _activeNavIndex = 0;
 
+  // Real-time Firestore Stream Subscriptions
+  StreamSubscription<List<InventoryItem>>? _inventorySubscription;
+  StreamSubscription<List<StaffMember>>? _staffSubscription;
+  StreamSubscription<List<ShopTransaction>>? _transactionSubscription;
+
   AppStateProvider({bool initialAuth = true}) : _isAuthenticated = initialAuth {
     _initializeData();
+    if (_isAuthenticated) {
+      _bindFirestoreStreams(_shopId);
+    }
   }
 
   void _initializeData() {
@@ -32,6 +43,62 @@ class AppStateProvider extends ChangeNotifier {
     _transactionList = MockDataRepository.getInitialTransactions();
     // Default current staff member for demo if switched to staff
     _currentStaff = _staffList.first;
+  }
+
+  void _bindFirestoreStreams(String targetShopId) {
+    _cancelFirestoreStreams();
+
+    try {
+      _inventorySubscription = FirestoreService.instance
+          .streamInventory(targetShopId)
+          .listen((items) {
+        if (items.isNotEmpty) {
+          _inventoryList = items;
+          notifyListeners();
+        }
+      }, onError: (err) {
+        debugPrint('AppStateProvider: Inventory stream error: $err');
+      });
+
+      _staffSubscription = FirestoreService.instance
+          .streamStaff(targetShopId)
+          .listen((staff) {
+        if (staff.isNotEmpty) {
+          _staffList = staff;
+          if (_currentStaff != null) {
+            _currentStaff = staff.firstWhere(
+              (s) => s.id == _currentStaff!.id,
+              orElse: () => staff.first,
+            );
+          }
+          notifyListeners();
+        }
+      }, onError: (err) {
+        debugPrint('AppStateProvider: Staff stream error: $err');
+      });
+
+      _transactionSubscription = FirestoreService.instance
+          .streamTransactions(targetShopId)
+          .listen((txs) {
+        if (txs.isNotEmpty) {
+          _transactionList = txs;
+          notifyListeners();
+        }
+      }, onError: (err) {
+        debugPrint('AppStateProvider: Transaction stream error: $err');
+      });
+    } catch (e) {
+      debugPrint('AppStateProvider: _bindFirestoreStreams notice: $e');
+    }
+  }
+
+  void _cancelFirestoreStreams() {
+    _inventorySubscription?.cancel();
+    _inventorySubscription = null;
+    _staffSubscription?.cancel();
+    _staffSubscription = null;
+    _transactionSubscription?.cancel();
+    _transactionSubscription = null;
   }
 
   // Getters
@@ -67,23 +134,39 @@ class AppStateProvider extends ChangeNotifier {
       _staffList.where((staff) => staff.isActive).length;
 
   // Auth Operations
-  void loginAsOwner(String email) {
+  void loginAsOwner(String email, {String? shopId, String? shopName}) {
     _isAuthenticated = true;
     _currentUserRole = UserRole.owner;
     _ownerEmail = email;
+    if (shopId != null && shopId.isNotEmpty) {
+      _shopId = shopId;
+    }
+    if (shopName != null && shopName.isNotEmpty) {
+      _shopName = shopName;
+    }
     _currentStaff = null;
+    _bindFirestoreStreams(_shopId);
     notifyListeners();
   }
 
-  void loginAsStaff(StaffMember staff) {
+  void loginAsStaff(StaffMember staff, {String? shopId, String? shopName}) {
     _isAuthenticated = true;
     _currentUserRole = UserRole.staff;
     _currentStaff = staff;
+    if (shopId != null && shopId.isNotEmpty) {
+      _shopId = shopId;
+    }
+    if (shopName != null && shopName.isNotEmpty) {
+      _shopName = shopName;
+    }
+    _bindFirestoreStreams(_shopId);
     notifyListeners();
   }
 
   void logout() {
     _isAuthenticated = false;
+    _cancelFirestoreStreams();
+    FirebaseAuthService.instance.signOut();
     notifyListeners();
   }
 
@@ -116,6 +199,7 @@ class AppStateProvider extends ChangeNotifier {
       if (_currentStaff?.id == staffId) {
         _currentStaff = _staffList[index];
       }
+      FirestoreService.instance.updateStaffPermission(_shopId, staffId, newPermission);
       notifyListeners();
     }
   }
@@ -124,7 +208,9 @@ class AppStateProvider extends ChangeNotifier {
     final index = _staffList.indexWhere((s) => s.id == staffId);
     if (index != -1) {
       final current = _staffList[index];
-      _staffList[index] = current.copyWith(isActive: !current.isActive);
+      final updated = current.copyWith(isActive: !current.isActive);
+      _staffList[index] = updated;
+      FirestoreService.instance.toggleStaffStatus(_shopId, staffId, updated.isActive);
       notifyListeners();
     }
   }
@@ -147,12 +233,15 @@ class AppStateProvider extends ChangeNotifier {
     _currentStaff = newStaff;
     _currentUserRole = UserRole.staff;
     _isAuthenticated = true;
+
+    FirestoreService.instance.addStaffMember(_shopId, newStaff);
     notifyListeners();
   }
 
   // Inventory Management Actions
   void addInventoryItem(InventoryItem item) {
     _inventoryList.insert(0, item);
+    FirestoreService.instance.addInventoryItem(_shopId, item);
     notifyListeners();
   }
 
@@ -160,6 +249,7 @@ class AppStateProvider extends ChangeNotifier {
     final index = _inventoryList.indexWhere((i) => i.id == updatedItem.id);
     if (index != -1) {
       _inventoryList[index] = updatedItem;
+      FirestoreService.instance.updateInventoryItem(_shopId, updatedItem);
       notifyListeners();
     }
   }
@@ -171,18 +261,27 @@ class AppStateProvider extends ChangeNotifier {
         quantity: newQuantity,
         lastUpdated: DateTime.now(),
       );
+      FirestoreService.instance.updateStockQuantity(_shopId, itemId, newQuantity);
       notifyListeners();
     }
   }
 
   void deleteInventoryItem(String itemId) {
     _inventoryList.removeWhere((i) => i.id == itemId);
+    FirestoreService.instance.deleteInventoryItem(_shopId, itemId);
     notifyListeners();
   }
 
   // Transaction Actions
   void addTransaction(ShopTransaction tx) {
     _transactionList.insert(0, tx);
+    FirestoreService.instance.addTransaction(_shopId, tx);
     notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    _cancelFirestoreStreams();
+    super.dispose();
   }
 }
